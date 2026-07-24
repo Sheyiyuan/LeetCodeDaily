@@ -38,7 +38,7 @@ const EMPTY_GITHUB: GitHubAuthState = {
   heatmapUrl: null,
 };
 
-const ACTIVITY_DAYS = 90;
+const ACTIVITY_DAYS = 60;
 
 async function sendDashboardMessage(
   type: "dashboard-read" | "dashboard-refresh" | "retry-all",
@@ -70,7 +70,7 @@ function ActivityGrid({ days, today }: { days: ActivityDaySummary[]; today: stri
   return (
     <section className="panel activity-panel" aria-labelledby="activity-heading">
       <div className="section-heading">
-        <h2 id="activity-heading">近 90 天</h2>
+        <h2 id="activity-heading">近 60 天</h2>
         <div className="activity-legend">
           <strong>{acceptedCount}</strong>
           <span>次通过</span>
@@ -79,7 +79,7 @@ function ActivityGrid({ days, today }: { days: ActivityDaySummary[]; today: stri
           ))}
         </div>
       </div>
-      <div className="activity-grid" style={{ gridTemplateColumns: "repeat(30, minmax(0, 1fr))" }}>
+      <div className="activity-grid" style={{ gridTemplateColumns: "repeat(20, minmax(0, 1fr))" }}>
         {dates.map((date) => {
           const day = activityByDate.get(date);
           const distinct = day?.distinctProblemCount ?? 0;
