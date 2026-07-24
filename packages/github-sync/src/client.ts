@@ -37,6 +37,8 @@ export interface GitHubAtomicCommitClientOptions {
   apiBaseUrl?: string;
 }
 
+const defaultFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
+
 export class GitHubAtomicCommitClient {
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
@@ -44,7 +46,7 @@ export class GitHubAtomicCommitClient {
 
   constructor(options: GitHubAtomicCommitClientOptions) {
     this.token = options.token;
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = options.fetch ?? defaultFetch;
     this.apiBaseUrl = options.apiBaseUrl ?? "https://api.github.com";
   }
 

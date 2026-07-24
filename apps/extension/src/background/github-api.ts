@@ -12,6 +12,8 @@ interface GitHubRepositoryResponse {
   owner: { login: string };
 }
 
+const defaultFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
+
 export class GitHubApiError extends Error {
   constructor(
     message: string,
@@ -25,7 +27,7 @@ export class GitHubApiError extends Error {
 export class GitHubRepositoryClient {
   constructor(
     private readonly token: string,
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = defaultFetch,
     private readonly apiBaseUrl = "https://api.github.com",
   ) {}
 

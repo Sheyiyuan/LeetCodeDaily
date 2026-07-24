@@ -80,4 +80,27 @@ describe("GitHubRepositoryClient", () => {
       "release",
     ]);
   });
+
+  it("invokes the Worker global fetch with the correct receiver", async () => {
+    const originalFetch = globalThis.fetch;
+    let receiver: unknown;
+    globalThis.fetch = function (this: unknown, input) {
+      receiver = this;
+      const url = String(input);
+      if (url.includes("/user/installations?")) {
+        return Promise.resolve(json({ installations: [] }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    } as typeof fetch;
+
+    try {
+      await expect(
+        new GitHubRepositoryClient("token").listAuthorizedRepositories(),
+      ).resolves.toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(receiver).toBe(globalThis);
+  });
 });

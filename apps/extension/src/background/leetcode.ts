@@ -63,7 +63,8 @@ async function leetcodeFetch(
   const method = init?.method ?? "GET";
   const body = typeof init?.body === "string" ? init.body : null;
   return (
-    (await fetchThroughLeetCodePage(url, method, body)) ?? fetch(input, init)
+    (await fetchThroughLeetCodePage(url, method, body)) ??
+    globalThis.fetch(input, init)
   );
 }
 

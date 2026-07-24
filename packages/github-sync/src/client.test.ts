@@ -212,4 +212,29 @@ describe("GitHubAtomicCommitClient", () => {
     ).rejects.toThrow("unsafe repository path");
     expect(called).toBe(false);
   });
+
+  it("invokes the Worker global fetch with the correct receiver", async () => {
+    const originalFetch = globalThis.fetch;
+    let receiver: unknown;
+    globalThis.fetch = function (this: unknown) {
+      receiver = this;
+      return Promise.resolve(response({ message: "not found" }, 404));
+    } as typeof fetch;
+
+    try {
+      await expect(
+        new GitHubAtomicCommitClient({ token: "token" }).commitFiles({
+          owner: "octocat",
+          repository: "leetcode",
+          branch: "main",
+          message: "solve: two sum",
+          files: [{ path: "README.md", content: "# Two Sum" }],
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(receiver).toBe(globalThis);
+  });
 });

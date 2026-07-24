@@ -28,6 +28,7 @@ import {
 
 const ENDPOINT = "https://leetcode.cn/graphql/";
 const PROBLEMS_ENDPOINT = "https://leetcode.cn/api/problems/all/";
+const defaultFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
 
 export interface SolvedProblemSummary {
   questionId: string;
@@ -73,7 +74,7 @@ export class LeetCodeCnClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: LeetCodeCnClientOptions = {}) {
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = options.fetch ?? defaultFetch;
   }
 
   async getAccountStatus(): Promise<AccountStatus> {
