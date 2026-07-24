@@ -31,7 +31,7 @@ const dashboard: DashboardState = {
     hard: 10,
     observedAt: "2026-07-30T08:16:00.000Z",
   },
-  activityDays: Array.from({ length: 30 }, (_, index) => ({
+  activityDays: Array.from({ length: 90 }, (_, index) => ({
     localDate: `2026-07-${String(index + 1).padStart(2, "0")}`,
     acceptedSubmissionCount: (index % 4) + 1,
     distinctProblemCount: index % 5,
