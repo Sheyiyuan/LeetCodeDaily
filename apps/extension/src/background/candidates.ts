@@ -5,15 +5,13 @@ import {
   retryDelayMs,
   type SubmissionCandidate,
 } from "@leetcode-daily/domain";
-import { LeetCodeCnClient } from "@leetcode-daily/leetcode-cn";
 
 import { setCompletedBadge, setFailureBadge } from "./badge";
 import { syncActivityToCloud } from "./activity-sync";
 import { countCandidateStates, database } from "./database";
 import { readSettings } from "./settings";
 import { enqueueGitHubSync } from "./sync";
-
-const client = new LeetCodeCnClient();
+import { leetcodeClient } from "./leetcode";
 
 export async function observeAccepted(
   input: Pick<
@@ -67,8 +65,10 @@ async function hydrateCandidate(key: string): Promise<void> {
   }
 
   try {
-    const submission = await client.getSubmissionDetail(candidate.submissionId);
-    const problem = await client.getQuestion(submission.titleSlug);
+    const submission = await leetcodeClient.getSubmissionDetail(
+      candidate.submissionId,
+    );
+    const problem = await leetcodeClient.getQuestion(submission.titleSlug);
     await db.put("submissions", submission);
     await db.put("candidates", {
       ...candidate,

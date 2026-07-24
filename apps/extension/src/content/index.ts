@@ -4,6 +4,32 @@ const SUBMISSION_DETAIL_PATTERN = /\/submissions\/detail\/(\d+)\/?/;
 
 let lastFingerprint = "";
 
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (
+    !message ||
+    message.type !== "leetcode-proxy-request" ||
+    typeof message.body !== "string"
+  ) {
+    return false;
+  }
+
+  void fetch("https://leetcode.cn/graphql/", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: message.body,
+  })
+    .then(async (response) =>
+      sendResponse({
+        ok: true,
+        status: response.status,
+        body: await response.text(),
+      }),
+    )
+    .catch(() => sendResponse({ ok: false }));
+  return true;
+});
+
 function currentTitleSlug(): string | null {
   return (
     location.pathname.match(/^\/problems\/([^/]+)/)?.[1] ??
