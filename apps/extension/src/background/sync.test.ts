@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { hasEquivalentSyncJob, shouldRetrySyncJob } from "./sync";
+import { hasEquivalentSyncJob, isPermanentSyncInputError, shouldRetrySyncJob } from "./sync";
+
+describe("sync error classification", () => {
+  it("keeps Worker fetch invocation errors retryable", () => {
+    expect(isPermanentSyncInputError(new TypeError("Illegal invocation"))).toBe(false);
+    expect(isPermanentSyncInputError(new TypeError("unsafe repository path: ../README.md"))).toBe(
+      true,
+    );
+  });
+});
 
 describe("hasEquivalentSyncJob", () => {
   it("detects an existing job with the same target and content hash", () => {

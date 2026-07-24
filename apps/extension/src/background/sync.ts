@@ -13,8 +13,8 @@ import {
   generateSolutionFile,
 } from "@leetcode-daily/problem-markdown";
 
-import { setFailureBadge } from "./badge";
 import { githubAccessToken } from "./auth";
+import { setFailureBadge } from "./badge";
 import { database, type StoredSyncJob } from "./database";
 import { readSettings } from "./settings";
 
@@ -67,6 +67,13 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export function isPermanentSyncInputError(cause: unknown): boolean {
+  if (!(cause instanceof TypeError)) return false;
+  return /^(owner, repository and branch are required|commit message is required|at least one file is required|unsafe repository path:|duplicate repository path:)/.test(
+    cause.message,
+  );
 }
 
 export async function enqueueGitHubSync(
@@ -154,9 +161,6 @@ export async function runSyncJob(jobId: string): Promise<void> {
   const job = await db.get("syncJobs", jobId);
   if (!job || job.state === "succeeded") return;
 
-  const token = await githubAccessToken();
-  if (!token) return;
-
   const syncing: StoredSyncJob = {
     ...job,
     state: "syncing",
@@ -166,6 +170,8 @@ export async function runSyncJob(jobId: string): Promise<void> {
   await db.put("syncJobs", syncing);
 
   try {
+    const token = await githubAccessToken();
+    if (!token) throw new Error("GitHub access token unavailable");
     const client = new GitHubAtomicCommitClient({ token });
     await client.commitFiles({
       owner: job.owner,
@@ -183,10 +189,8 @@ export async function runSyncJob(jobId: string): Promise<void> {
       updatedAt: new Date().toISOString(),
     });
   } catch (cause) {
-    const retryable =
-      cause instanceof GitHubSyncError
-        ? cause.retryable
-        : !(cause instanceof TypeError);
+    const permanentInputError = isPermanentSyncInputError(cause);
+    const retryable = cause instanceof GitHubSyncError ? cause.retryable : !permanentInputError;
     await db.put("syncJobs", {
       ...syncing,
       state: retryable ? "retryable-failure" : "permanent-failure",
