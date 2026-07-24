@@ -77,6 +77,10 @@ GitHub App 需要：
 - 开启 expiring user access tokens
 - 安装范围由用户选择目标仓库
 
+如果在 GitHub App 创建后才把 `Contents` 从只读改为 `Read and write`，还需要在
+GitHub 的 App 安装设置中批准新增权限。批准后，在扩展设置页断开并重新连接
+GitHub，再从 Popup 重试已有任务；不需要重新提交 LeetCode 题目。
+
 将 Chrome 商店最终扩展 ID 写入：
 
 - Worker 的 `ALLOWED_EXTENSION_ORIGIN`：`chrome-extension://<extension-id>`
