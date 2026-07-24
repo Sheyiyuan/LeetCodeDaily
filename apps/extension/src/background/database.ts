@@ -5,12 +5,39 @@ import type {
   SyncJob,
 } from "@leetcode-daily/domain";
 import type { CommitFile } from "@leetcode-daily/github-sync";
+import type { SolvedProblemSummary } from "@leetcode-daily/leetcode-cn";
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 export interface StoredSyncJob extends SyncJob {
   owner: string;
   message: string;
   files: CommitFile[];
+}
+
+export interface StoredHistoryImport {
+  id: "history-import";
+  state: "running" | "paused" | "cancelled" | "completed" | "failed";
+  problemSlugs: SolvedProblemSummary[];
+  nextIndex: number;
+  importedProblems: number;
+  failures: Array<{ titleSlug: string; message: string }>;
+  pendingFiles: CommitFile[];
+  pendingProblemCount: number;
+  owner: string;
+  repository: string;
+  branch: string;
+  rootDirectory: string;
+  currentTitleSlug: string | null;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface StoredHistoricalAccepted {
+  submissionId: string;
+  problemId: string;
+  submittedAt: string;
 }
 
 interface LeetCodeDailyDb extends DBSchema {
@@ -38,13 +65,32 @@ interface LeetCodeDailyDb extends DBSchema {
     value: StoredSyncJob;
     indexes: { "by-state": string };
   };
+  historyImport: {
+    key: string;
+    value: StoredHistoryImport;
+  };
+  historicalAccepted: {
+    key: string;
+    value: StoredHistoricalAccepted;
+  };
 }
 
 let databasePromise: Promise<IDBPDatabase<LeetCodeDailyDb>> | null = null;
 
 export function database(): Promise<IDBPDatabase<LeetCodeDailyDb>> {
-  databasePromise ??= openDB<LeetCodeDailyDb>("leetcode-daily", 1, {
-    upgrade(db) {
+  databasePromise ??= openDB<LeetCodeDailyDb>("leetcode-daily", 2, {
+    upgrade(db, oldVersion) {
+      if (oldVersion >= 1) {
+        if (!db.objectStoreNames.contains("historyImport")) {
+          db.createObjectStore("historyImport", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("historicalAccepted")) {
+          db.createObjectStore("historicalAccepted", {
+            keyPath: "submissionId",
+          });
+        }
+        return;
+      }
       const candidates = db.createObjectStore("candidates", {
         keyPath: "key",
       });
@@ -59,6 +105,11 @@ export function database(): Promise<IDBPDatabase<LeetCodeDailyDb>> {
 
       const jobs = db.createObjectStore("syncJobs", { keyPath: "id" });
       jobs.createIndex("by-state", "state");
+
+      db.createObjectStore("historyImport", { keyPath: "id" });
+      db.createObjectStore("historicalAccepted", {
+        keyPath: "submissionId",
+      });
     },
   });
   return databasePromise;
@@ -96,7 +147,14 @@ export async function countCandidateStates(): Promise<{
 export async function clearDatabase(): Promise<void> {
   const db = await database();
   const transaction = db.transaction(
-    ["candidates", "submissions", "dailyActivity", "syncJobs"],
+    [
+      "candidates",
+      "submissions",
+      "dailyActivity",
+      "syncJobs",
+      "historyImport",
+      "historicalAccepted",
+    ],
     "readwrite",
   );
   await Promise.all([
@@ -104,6 +162,8 @@ export async function clearDatabase(): Promise<void> {
     transaction.objectStore("submissions").clear(),
     transaction.objectStore("dailyActivity").clear(),
     transaction.objectStore("syncJobs").clear(),
+    transaction.objectStore("historyImport").clear(),
+    transaction.objectStore("historicalAccepted").clear(),
   ]);
   await transaction.done;
 }

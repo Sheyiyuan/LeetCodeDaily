@@ -186,4 +186,40 @@ describe("LeetCodeCnClient", () => {
     ]);
     expect(requestCount).toBe(1);
   });
+
+  it("returns every accepted submission for history statistics", async () => {
+    const client = new LeetCodeCnClient({
+      fetch: async () =>
+        jsonResponse({
+          data: {
+            submissionList: {
+              lastKey: null,
+              hasNext: false,
+              submissions: [
+                {
+                  id: "100",
+                  titleSlug: "two-sum",
+                  statusDisplay: "Accepted",
+                  lang: "typescript",
+                  timestamp: 100,
+                  frontendId: "1",
+                },
+                {
+                  id: "101",
+                  titleSlug: "two-sum",
+                  statusDisplay: "Accepted",
+                  lang: "typescript",
+                  timestamp: 200,
+                  frontendId: "1",
+                },
+              ],
+            },
+          },
+        }),
+    });
+
+    await expect(client.getAcceptedSubmissions("two-sum")).resolves.toHaveLength(
+      2,
+    );
+  });
 });

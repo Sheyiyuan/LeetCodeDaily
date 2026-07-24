@@ -35,7 +35,9 @@ export function localDateForInstant(
 }
 
 export function aggregateDailyActivity(
-  submissions: Submission[],
+  submissions: Array<
+    Pick<Submission, "submissionId" | "problemId" | "submittedAt">
+  >,
   timezone: string,
 ): DailyActivity[] {
   const buckets = new Map<

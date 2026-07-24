@@ -7,12 +7,16 @@ import {
   FolderGit2,
   GitBranch,
   Globe2,
+  History,
   Moon,
+  Pause,
+  Play,
   RefreshCw,
   Save,
   Sun,
   Trash2,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -20,6 +24,7 @@ import type {
   ExtensionSettings,
   GitHubAuthState,
   GitHubRepositorySummary,
+  HistoryImportStatus,
   MessageResponse,
 } from "../shared/messages";
 import { useTheme } from "../shared/use-theme";
@@ -37,6 +42,19 @@ const EMPTY_GITHUB: GitHubAuthState = {
   login: null,
   sessionExpiresAt: null,
   heatmapUrl: null,
+};
+
+const EMPTY_IMPORT: HistoryImportStatus = {
+  state: "idle",
+  totalProblems: 0,
+  processedProblems: 0,
+  importedProblems: 0,
+  failedProblems: 0,
+  failures: [],
+  currentTitleSlug: null,
+  lastError: null,
+  startedAt: null,
+  updatedAt: null,
 };
 
 function repositoryIsValid(value: string | null): boolean {
@@ -62,6 +80,8 @@ export function App() {
   const [repositoryBusy, setRepositoryBusy] = useState(false);
   const [repositories, setRepositories] = useState<GitHubRepositorySummary[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
+  const [historyImport, setHistoryImport] = useState(EMPTY_IMPORT);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [theme, toggleTheme] = useTheme();
 
@@ -82,6 +102,22 @@ export function App() {
         },
       )
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function refreshHistory(): Promise<void> {
+      const response = (await chrome.runtime.sendMessage({
+        type: "history-import-read",
+      })) as MessageResponse<HistoryImportStatus>;
+      if (active && response.ok && response.data) setHistoryImport(response.data);
+    }
+    void refreshHistory();
+    const interval = window.setInterval(() => void refreshHistory(), 2_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -213,6 +249,33 @@ export function App() {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1_500);
   }
+
+  async function historyAction(
+    action: "start" | "pause" | "resume" | "cancel",
+  ): Promise<void> {
+    setHistoryBusy(true);
+    setError(null);
+    try {
+      const response = (await chrome.runtime.sendMessage({
+        type: `history-import-${action}`,
+      })) as MessageResponse<HistoryImportStatus>;
+      if (!response.ok || !response.data) {
+        throw new Error(response.error ?? "历史导入操作失败");
+      }
+      setHistoryImport(response.data);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "历史导入操作失败");
+    } finally {
+      setHistoryBusy(false);
+    }
+  }
+
+  const historyProgress =
+    historyImport.totalProblems > 0
+      ? Math.round(
+          (historyImport.processedProblems / historyImport.totalProblems) * 100,
+        )
+      : 0;
 
   return (
     <main className="options-shell">
@@ -358,6 +421,65 @@ export function App() {
               <a aria-label="打开热力图" className="icon-button" href={github.heatmapUrl} rel="noreferrer" target="_blank" title="打开热力图"><ExternalLink size={15} /></a>
             </div>
           ) : null}
+        </div>
+      </section>
+
+      <section className="settings-section" aria-labelledby="history-section-heading">
+        <div className="settings-section-heading">
+          <History size={18} />
+          <div>
+            <h2 id="history-section-heading">历史题解</h2>
+            <p>批量导入与进度恢复</p>
+          </div>
+        </div>
+        <div className="settings-content">
+          <div className="import-summary">
+            <div className="import-summary-row">
+              <strong>
+                {historyImport.state === "idle"
+                  ? "尚未导入"
+                  : `${historyImport.processedProblems} / ${historyImport.totalProblems}`}
+              </strong>
+              <span>{historyProgress}%</span>
+            </div>
+            <div className="progress-track" aria-label={`历史导入进度 ${historyProgress}%`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={historyProgress}>
+              <span style={{ width: `${historyProgress}%` }} />
+            </div>
+            <div className="import-meta">
+              <span>已写入 {historyImport.importedProblems}</span>
+              <span>失败 {historyImport.failedProblems}</span>
+              {historyImport.currentTitleSlug ? <code>{historyImport.currentTitleSlug}</code> : null}
+            </div>
+          </div>
+
+          {historyImport.lastError ? <div className="inline-warning"><TriangleAlert size={13} />{historyImport.lastError}</div> : null}
+
+          {historyImport.failures.length > 0 ? (
+            <details className="import-failures">
+              <summary>查看 {historyImport.failures.length} 道失败题目</summary>
+              <ul>
+                {historyImport.failures.map((failure, index) => (
+                  <li key={`${failure.titleSlug}-${index}`}>
+                    <code>{failure.titleSlug}</code>
+                    <span>{failure.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+
+          <div className="import-actions">
+            {historyImport.state === "running" ? (
+              <button className="secondary-button" disabled={historyBusy} onClick={() => void historyAction("pause")} type="button"><Pause size={14} />暂停</button>
+            ) : historyImport.state === "paused" || historyImport.state === "failed" ? (
+              <button className="primary-button compact" disabled={historyBusy} onClick={() => void historyAction("resume")} type="button"><Play size={14} />继续</button>
+            ) : (
+              <button className="primary-button compact" disabled={historyBusy || !github.connected || !settings.githubRepository} onClick={() => void historyAction("start")} type="button"><Play size={14} />{historyImport.state === "completed" ? "重新导入" : "开始导入"}</button>
+            )}
+            {historyImport.state === "running" || historyImport.state === "paused" || historyImport.state === "failed" ? (
+              <button className="small-command" disabled={historyBusy} onClick={() => void historyAction("cancel")} type="button"><X size={13} />取消</button>
+            ) : null}
+          </div>
         </div>
       </section>
 

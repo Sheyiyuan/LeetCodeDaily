@@ -47,6 +47,21 @@ export interface LeetCodeCnClientOptions {
   fetch?: typeof fetch;
 }
 
+export function latestAcceptedByLanguage(
+  submissions: AcceptedSubmissionSummary[],
+): AcceptedSubmissionSummary[] {
+  const latest = new Map<string, AcceptedSubmissionSummary>();
+  for (const submission of submissions) {
+    const existing = latest.get(submission.language);
+    if (!existing || submission.timestamp > existing.timestamp) {
+      latest.set(submission.language, submission);
+    }
+  }
+  return [...latest.values()].sort((left, right) =>
+    left.language.localeCompare(right.language),
+  );
+}
+
 export class LeetCodeCnClient {
   readonly endpoint = ENDPOINT;
   private readonly fetchImpl: typeof fetch;
@@ -200,7 +215,7 @@ export class LeetCodeCnClient {
       }));
   }
 
-  async getLatestAcceptedByLanguage(
+  async getAcceptedSubmissions(
     titleSlug: string,
   ): Promise<AcceptedSubmissionSummary[]> {
     const all: AcceptedSubmissionSummary[] = [];
@@ -237,15 +252,14 @@ export class LeetCodeCnClient {
       if (hasNext && data.submissionList.submissions.length === 0) break;
     }
 
-    const latest = new Map<string, AcceptedSubmissionSummary>();
-    for (const submission of all) {
-      const existing = latest.get(submission.language);
-      if (!existing || submission.timestamp > existing.timestamp) {
-        latest.set(submission.language, submission);
-      }
-    }
-    return [...latest.values()].sort((left, right) =>
-      left.language.localeCompare(right.language),
+    return all;
+  }
+
+  async getLatestAcceptedByLanguage(
+    titleSlug: string,
+  ): Promise<AcceptedSubmissionSummary[]> {
+    return latestAcceptedByLanguage(
+      await this.getAcceptedSubmissions(titleSlug),
     );
   }
 

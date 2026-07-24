@@ -18,6 +18,27 @@ export interface GitHubRepositorySummary {
   private: boolean;
 }
 
+export type HistoryImportState =
+  | "idle"
+  | "running"
+  | "paused"
+  | "cancelled"
+  | "completed"
+  | "failed";
+
+export interface HistoryImportStatus {
+  state: HistoryImportState;
+  totalProblems: number;
+  processedProblems: number;
+  importedProblems: number;
+  failedProblems: number;
+  currentTitleSlug: string | null;
+  lastError: string | null;
+  failures: Array<{ titleSlug: string; message: string }>;
+  startedAt: string | null;
+  updatedAt: string | null;
+}
+
 export type ExtensionMessage =
   | {
       type: "accepted-observed";
@@ -37,6 +58,11 @@ export type ExtensionMessage =
       type: "github-branches-read";
       payload: { repository: string };
     }
+  | { type: "history-import-read" }
+  | { type: "history-import-start" }
+  | { type: "history-import-pause" }
+  | { type: "history-import-resume" }
+  | { type: "history-import-cancel" }
   | { type: "retry-all" }
   | { type: "settings-read" }
   | { type: "settings-write"; payload: ExtensionSettings };

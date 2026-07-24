@@ -4,6 +4,7 @@ import type {
   ExtensionSettings,
   GitHubAuthState,
   GitHubRepositorySummary,
+  HistoryImportStatus,
   MessageResponse,
 } from "../shared/messages";
 import { localDateForInstant } from "@leetcode-daily/domain";
@@ -24,6 +25,15 @@ import { readSettings, writeSettings } from "./settings";
 import { retrySyncJobs } from "./sync";
 import { clearDatabase, countCandidateStates, database } from "./database";
 import { clearBadge, setCompletedBadge, setFailureBadge } from "./badge";
+import {
+  cancelHistoryImport,
+  HISTORY_IMPORT_ALARM,
+  pauseHistoryImport,
+  readHistoryImport,
+  resumeHistoryImport,
+  runHistoryImport,
+  startHistoryImport,
+} from "./history-import";
 
 const RETRY_ALARM = "retry-failed-work";
 
@@ -53,10 +63,14 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   void chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 });
+  void readHistoryImport().then((status) => {
+    if (status.state === "running") void runHistoryImport();
+  });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === RETRY_ALARM) void retryWork(false);
+  if (alarm.name === HISTORY_IMPORT_ALARM) void runHistoryImport();
 });
 
 chrome.runtime.onMessage.addListener(
@@ -71,6 +85,7 @@ chrome.runtime.onMessage.addListener(
         | GitHubAuthState
         | GitHubRepositorySummary[]
         | string[]
+        | HistoryImportStatus
       >,
     ) => void,
   ) => {
@@ -114,6 +129,21 @@ chrome.runtime.onMessage.addListener(
               ok: true,
               data: await readRepositoryBranches(message.payload.repository),
             });
+            break;
+          case "history-import-read":
+            sendResponse({ ok: true, data: await readHistoryImport() });
+            break;
+          case "history-import-start":
+            sendResponse({ ok: true, data: await startHistoryImport() });
+            break;
+          case "history-import-pause":
+            sendResponse({ ok: true, data: await pauseHistoryImport() });
+            break;
+          case "history-import-resume":
+            sendResponse({ ok: true, data: await resumeHistoryImport() });
+            break;
+          case "history-import-cancel":
+            sendResponse({ ok: true, data: await cancelHistoryImport() });
             break;
           case "retry-all":
             await retryWork(true);

@@ -1,5 +1,4 @@
 import {
-  aggregateDailyActivity,
   candidateKey,
   LEETCODE_SITE,
   retryDelayMs,
@@ -9,8 +8,8 @@ import { LeetCodeApiError } from "@leetcode-daily/leetcode-cn";
 
 import { setCompletedBadge, setFailureBadge } from "./badge";
 import { syncActivityToCloud } from "./activity-sync";
+import { rebuildDailyActivity } from "./activity-ledger";
 import { countCandidateStates, database } from "./database";
-import { readSettings } from "./settings";
 import { enqueueGitHubSync } from "./sync";
 import { leetcodeClient } from "./leetcode";
 
@@ -80,14 +79,7 @@ async function hydrateCandidate(key: string): Promise<void> {
       updatedAt: new Date().toISOString(),
     });
 
-    const settings = await readSettings();
-    const allSubmissions = await db.getAll("submissions");
-    for (const activity of aggregateDailyActivity(
-      allSubmissions,
-      settings.timezone,
-    )) {
-      await db.put("dailyActivity", activity);
-    }
+    await rebuildDailyActivity();
     await enqueueGitHubSync(submission, problem);
     let activitySyncFailed = false;
     try {

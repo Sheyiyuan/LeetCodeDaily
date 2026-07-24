@@ -741,6 +741,132 @@ input:disabled {
 
 .primary-button:hover { background: var(--accent-hover); }
 
+.primary-button.compact {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.import-summary {
+  display: grid;
+  gap: 9px;
+}
+
+.import-failures {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field);
+  padding: 9px 11px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.import-failures summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.import-failures ul {
+  display: grid;
+  max-height: 180px;
+  gap: 8px;
+  overflow-y: auto;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-failures li {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.import-failures code {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.import-failures span {
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.import-summary-row,
+.import-meta,
+.import-actions {
+  display: flex;
+  align-items: center;
+}
+
+.import-summary-row {
+  justify-content: space-between;
+}
+
+.import-summary-row strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.import-summary-row span,
+.import-meta {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.progress-track {
+  position: relative;
+  width: 100%;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--border-strong);
+}
+
+.progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--easy);
+  transition: width 180ms ease;
+}
+
+.import-meta {
+  min-height: 18px;
+  gap: 12px;
+}
+
+.import-meta code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-actions {
+  gap: 8px;
+}
+
+.inline-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  border-radius: 6px;
+  background: var(--danger-soft);
+  padding: 8px 10px;
+  color: var(--hard);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.inline-warning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 .spin { animation: spin 700ms linear infinite; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
