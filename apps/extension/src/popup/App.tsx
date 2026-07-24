@@ -1,7 +1,6 @@
 import { activityLevel } from "@leetcode-daily/domain";
 import {
   Check,
-  Clock3,
   Code2,
   ExternalLink,
   Moon,
@@ -58,17 +57,8 @@ function previousDates(endDate: string, count: number): string[] {
   });
 }
 
-function ActivityGrid({
-  days,
-  today,
-}: {
-  days: ActivityDaySummary[];
-  today: string;
-}) {
-  const activityByDate = useMemo(
-    () => new Map(days.map((day) => [day.localDate, day])),
-    [days],
-  );
+function ActivityGrid({ days, today }: { days: ActivityDaySummary[]; today: string }) {
+  const activityByDate = useMemo(() => new Map(days.map((day) => [day.localDate, day])), [days]);
   const dates = useMemo(() => previousDates(today, 30), [today]);
   const acceptedCount = dates.reduce(
     (total, date) => total + (activityByDate.get(date)?.acceptedSubmissionCount ?? 0),
@@ -87,7 +77,7 @@ function ActivityGrid({
           ))}
         </div>
       </div>
-      <div className="activity-grid">
+      <div className="activity-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
         {dates.map((date) => {
           const day = activityByDate.get(date);
           const distinct = day?.distinctProblemCount ?? 0;
@@ -97,6 +87,7 @@ function ActivityGrid({
               aria-label={`${date}：${accepted} 次通过，${distinct} 道题`}
               className={`activity-cell level-${activityLevel(distinct)}`}
               key={date}
+              role="img"
               title={`${date} · ${accepted} 次通过 · ${distinct} 道题`}
             />
           );
@@ -154,6 +145,7 @@ export function App() {
 
   const signedIn = state.account?.isSignedIn === true;
   const displayName = signedIn ? state.account?.username : "LeetCodeDaily";
+  const username = state.account?.username?.trim() || github.login;
   const updatedAt = state.lastSuccessfulRefreshAt
     ? new Date(state.lastSuccessfulRefreshAt).toLocaleTimeString([], {
         hour: "2-digit",
@@ -163,9 +155,7 @@ export function App() {
   const visibleError =
     clientError?.trim() ||
     state.error?.trim() ||
-    (state.failedCount > 0
-      ? `${state.failedCount} 项任务失败，请点击重试查看原因`
-      : null);
+    (state.failedCount > 0 ? `${state.failedCount} 项任务失败，请点击重试查看原因` : null);
 
   return (
     <main className="popup-shell">
@@ -183,11 +173,15 @@ export function App() {
           {state.account?.avatarUrl ? (
             <img alt="" className="avatar" src={state.account.avatarUrl} />
           ) : (
-            <span className="brand-mark"><Code2 size={17} /></span>
+            <span className="brand-mark">
+              <Code2 size={17} />
+            </span>
           )}
           <span>
             <strong>{displayName}</strong>
-            <small>{signedIn ? `leetcode.cn${updatedAt ? ` · ${updatedAt}` : ""}` : "仅连接力扣中国站"}</small>
+            <small>
+              {signedIn ? `leetcode.cn${updatedAt ? ` · ${updatedAt}` : ""}` : "仅连接力扣中国站"}
+            </small>
           </span>
         </a>
         <div className="header-actions">
@@ -223,7 +217,12 @@ export function App() {
       </header>
 
       {!signedIn && !loading ? (
-        <a className="notice-row" href="https://leetcode.cn/accounts/login/" rel="noreferrer" target="_blank">
+        <a
+          className="notice-row"
+          href="https://leetcode.cn/accounts/login/"
+          rel="noreferrer"
+          target="_blank"
+        >
           <span>登录力扣中国站后显示刷题数据</span>
           <ExternalLink size={14} />
         </a>
@@ -235,9 +234,15 @@ export function App() {
           <strong>{loading && !state.stats ? "-" : (state.stats?.total ?? 0)}</strong>
         </div>
         <div className="difficulty-stats">
-          <span><strong className="easy">{state.stats?.easy ?? 0}</strong>简单</span>
-          <span><strong className="medium">{state.stats?.medium ?? 0}</strong>中等</span>
-          <span><strong className="hard">{state.stats?.hard ?? 0}</strong>困难</span>
+          <span>
+            <strong className="easy">{state.stats?.easy ?? 0}</strong>简单
+          </span>
+          <span>
+            <strong className="medium">{state.stats?.medium ?? 0}</strong>中等
+          </span>
+          <span>
+            <strong className="hard">{state.stats?.hard ?? 0}</strong>困难
+          </span>
         </div>
       </section>
 
@@ -247,8 +252,14 @@ export function App() {
         <div className="section-heading">
           <h2 id="sync-heading">同步状态</h2>
           {state.failedCount > 0 ? (
-            <button className="small-command danger" disabled={loading} onClick={() => void retry()} type="button">
-              <RotateCcw size={13} />重试
+            <button
+              className="small-command danger"
+              disabled={loading}
+              onClick={() => void retry()}
+              type="button"
+            >
+              <RotateCcw size={13} />
+              重试
             </button>
           ) : null}
         </div>
@@ -258,21 +269,17 @@ export function App() {
               {github.connected ? <Check size={13} /> : <Code2 size={13} />}
             </span>
             <span>GitHub</span>
-            <strong>{github.connected ? `@${github.login}` : "未连接"}</strong>
+            <strong>{github.connected ? username : "未连接"}</strong>
           </div>
-          <div>
-            <span className={`status-icon ${state.failedCount > 0 ? "failure" : state.pendingCount > 0 ? "pending" : "success"}`}>
-              {state.failedCount > 0 ? <TriangleAlert size={13} /> : state.pendingCount > 0 ? <Clock3 size={13} /> : <Check size={13} />}
-            </span>
-            <span>提交队列</span>
-            <strong>
-              {state.failedCount > 0
-                ? `${state.failedCount} 项失败`
-                : state.pendingCount > 0
-                  ? `${state.pendingCount} 项处理中`
-                  : "全部完成"}
-            </strong>
-          </div>
+          {state.failedCount > 0 ? (
+            <div>
+              <span className="status-icon failure">
+                <TriangleAlert size={13} />
+              </span>
+              <span>提交失败</span>
+              <strong>{state.failedCount} 项</strong>
+            </div>
+          ) : null}
         </div>
         {visibleError ? (
           <p className="sync-error-message">
@@ -282,8 +289,15 @@ export function App() {
         ) : null}
       </section>
 
-      <button className="settings-row" onClick={() => void chrome.runtime.openOptionsPage()} type="button">
-        <span><Settings size={15} />GitHub 与同步设置</span>
+      <button
+        className="settings-row"
+        onClick={() => void chrome.runtime.openOptionsPage()}
+        type="button"
+      >
+        <span>
+          <Settings size={15} />
+          GitHub 与同步设置
+        </span>
         <ExternalLink size={14} />
       </button>
     </main>
