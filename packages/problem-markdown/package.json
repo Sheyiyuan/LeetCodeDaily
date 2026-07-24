@@ -1,0 +1,22 @@
+{
+  "name": "@leetcode-daily/problem-markdown",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "@leetcode-daily/domain": "workspace:*",
+    "sanitize-html": "^2.17.6"
+  },
+  "devDependencies": {
+    "@types/sanitize-html": "^2.16.1"
+  }
+}
