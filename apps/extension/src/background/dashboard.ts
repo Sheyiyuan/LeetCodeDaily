@@ -1,8 +1,4 @@
-import {
-  localDateForInstant,
-  type AccountStatus,
-  type SolvedStats,
-} from "@leetcode-daily/domain";
+import { localDateForInstant, type AccountStatus, type SolvedStats } from "@leetcode-daily/domain";
 import type { DashboardState } from "../shared/messages";
 import { countCandidateStates, database } from "./database";
 import { displayStoredSyncFailure } from "./github-errors";
@@ -39,20 +35,17 @@ export function latestFailureMessage(
   }
   for (const job of syncJobs) {
     const message = job.lastErrorMessage?.trim();
-    if (
-      message &&
-      (job.state === "retryable-failure" ||
-        job.state === "permanent-failure")
-    ) {
+    if (message && (job.state === "retryable-failure" || job.state === "permanent-failure")) {
       failures.push({
         message: displayStoredSyncFailure(message),
         updatedAt: job.updatedAt,
       });
     }
   }
-  return failures.sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
-  )[0]?.message ?? null;
+  return (
+    failures.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.message ??
+    null
+  );
 }
 
 export function dashboardFailureMessage(
@@ -62,9 +55,7 @@ export function dashboardFailureMessage(
 ): string | null {
   return (
     latestFailureMessage(candidates, syncJobs) ??
-    (failedCount > 0
-      ? `${failedCount} 项任务失败，旧记录没有错误详情，请点击重试`
-      : null)
+    (failedCount > 0 ? `${failedCount} 项任务失败，旧记录没有错误详情，请点击重试` : null)
   );
 }
 
@@ -103,6 +94,8 @@ export async function readDashboard(): Promise<DashboardState> {
       distinctProblemCount: day.distinctProblemIds.length,
     }));
   const historyActivity = await db.get("historyActivity", "history-activity");
+  const historyError =
+    historyActivity?.state === "failed" ? historyActivity.lastError?.trim() : null;
   return {
     account,
     stats,
@@ -111,7 +104,6 @@ export async function readDashboard(): Promise<DashboardState> {
     pendingCount: counts.pending + (historyActivity?.state === "running" ? 1 : 0),
     failedCount: counts.failed,
     lastSuccessfulRefreshAt,
-    error:
-      dashboardFailureMessage(candidates, syncJobs, counts.failed) ?? error,
+    error: dashboardFailureMessage(candidates, syncJobs, counts.failed) ?? historyError ?? error,
   };
 }
