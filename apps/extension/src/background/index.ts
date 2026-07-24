@@ -3,6 +3,7 @@ import type {
   ExtensionMessage,
   ExtensionSettings,
   GitHubAuthState,
+  GitHubRepositorySummary,
   MessageResponse,
 } from "../shared/messages";
 import { localDateForInstant } from "@leetcode-daily/domain";
@@ -15,6 +16,10 @@ import {
 } from "./auth";
 import { syncActivityToCloud } from "./activity-sync";
 import { readDashboard, refreshDashboard } from "./dashboard";
+import {
+  readAuthorizedRepositories,
+  readRepositoryBranches,
+} from "./repositories";
 import { readSettings, writeSettings } from "./settings";
 import { retrySyncJobs } from "./sync";
 import { clearDatabase, countCandidateStates, database } from "./database";
@@ -60,8 +65,12 @@ chrome.runtime.onMessage.addListener(
     _sender,
     sendResponse: (
       response: MessageResponse<
-        DashboardState | ExtensionSettings | undefined
+        | DashboardState
+        | ExtensionSettings
+        | undefined
         | GitHubAuthState
+        | GitHubRepositorySummary[]
+        | string[]
       >,
     ) => void,
   ) => {
@@ -96,6 +105,15 @@ chrome.runtime.onMessage.addListener(
             await deleteGitHubAccount();
             await clearDatabase();
             sendResponse({ ok: true });
+            break;
+          case "github-repositories-read":
+            sendResponse({ ok: true, data: await readAuthorizedRepositories() });
+            break;
+          case "github-branches-read":
+            sendResponse({
+              ok: true,
+              data: await readRepositoryBranches(message.payload.repository),
+            });
             break;
           case "retry-all":
             await retryWork(true);

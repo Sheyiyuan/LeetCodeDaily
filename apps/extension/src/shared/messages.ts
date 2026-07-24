@@ -10,6 +10,14 @@ export interface ActivityDaySummary {
   distinctProblemCount: number;
 }
 
+export interface GitHubRepositorySummary {
+  fullName: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  private: boolean;
+}
+
 export type ExtensionMessage =
   | {
       type: "accepted-observed";
@@ -24,6 +32,11 @@ export type ExtensionMessage =
   | { type: "github-connect" }
   | { type: "github-disconnect" }
   | { type: "github-delete-account" }
+  | { type: "github-repositories-read" }
+  | {
+      type: "github-branches-read";
+      payload: { repository: string };
+    }
   | { type: "retry-all" }
   | { type: "settings-read" }
   | { type: "settings-write"; payload: ExtensionSettings };

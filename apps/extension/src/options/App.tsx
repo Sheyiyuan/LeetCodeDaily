@@ -8,6 +8,7 @@ import {
   GitBranch,
   Globe2,
   Moon,
+  RefreshCw,
   Save,
   Sun,
   Trash2,
@@ -18,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ExtensionSettings,
   GitHubAuthState,
+  GitHubRepositorySummary,
   MessageResponse,
 } from "../shared/messages";
 import { useTheme } from "../shared/use-theme";
@@ -57,6 +59,9 @@ export function App() {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const [repositoryBusy, setRepositoryBusy] = useState(false);
+  const [repositories, setRepositories] = useState<GitHubRepositorySummary[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [theme, toggleTheme] = useTheme();
 
@@ -79,6 +84,14 @@ export function App() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (github.connected) void loadRepositories();
+    else {
+      setRepositories([]);
+      setBranches([]);
+    }
+  }, [github.connected]);
+
   const validationError = useMemo(() => {
     if (!timezoneIsValid(settings.timezone)) return "请输入有效的 IANA 时区";
     if (!repositoryIsValid(settings.githubRepository)) return "仓库格式应为 owner/repository";
@@ -99,6 +112,55 @@ export function App() {
       setError(cause instanceof Error ? cause.message : "GitHub 操作失败");
     } finally {
       setAuthBusy(false);
+    }
+  }
+
+  async function loadRepositories(): Promise<void> {
+    setRepositoryBusy(true);
+    setError(null);
+    try {
+      const response = (await chrome.runtime.sendMessage({
+        type: "github-repositories-read",
+      })) as MessageResponse<GitHubRepositorySummary[]>;
+      if (!response.ok) throw new Error(response.error ?? "仓库列表读取失败");
+      const nextRepositories = response.data ?? [];
+      setRepositories(nextRepositories);
+      if (settings.githubRepository) {
+        await loadBranches(settings.githubRepository);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "仓库列表读取失败");
+    } finally {
+      setRepositoryBusy(false);
+    }
+  }
+
+  async function loadBranches(repository: string): Promise<void> {
+    const response = (await chrome.runtime.sendMessage({
+      type: "github-branches-read",
+      payload: { repository },
+    })) as MessageResponse<string[]>;
+    if (!response.ok) throw new Error(response.error ?? "分支列表读取失败");
+    setBranches(response.data ?? []);
+  }
+
+  async function selectRepository(repository: string): Promise<void> {
+    const selected = repositories.find((item) => item.fullName === repository);
+    setSettings({
+      ...settings,
+      githubRepository: repository || null,
+      githubBranch: selected?.defaultBranch ?? settings.githubBranch,
+    });
+    setBranches([]);
+    if (!repository) return;
+    setRepositoryBusy(true);
+    setError(null);
+    try {
+      await loadBranches(repository);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "分支列表读取失败");
+    } finally {
+      setRepositoryBusy(false);
     }
   }
 
@@ -205,22 +267,50 @@ export function App() {
           <div className="field-grid single">
             <label>
               <span>目标仓库</span>
-              <div className="input-with-icon">
-                <FolderGit2 size={15} />
-                <input
-                  disabled={loading}
-                  onChange={(event) => setSettings({ ...settings, githubRepository: event.target.value || null })}
-                  placeholder="owner/repository"
-                  spellCheck={false}
-                  value={settings.githubRepository ?? ""}
-                />
+              <div className="select-with-action">
+                <div className="select-with-icon">
+                  <FolderGit2 size={15} />
+                  <select
+                    disabled={!github.connected || repositoryBusy}
+                    onChange={(event) => void selectRepository(event.target.value)}
+                    value={settings.githubRepository ?? ""}
+                  >
+                    <option value="">选择已授权仓库</option>
+                    {settings.githubRepository && !repositories.some((repository) => repository.fullName === settings.githubRepository) ? (
+                      <option value={settings.githubRepository}>{settings.githubRepository}</option>
+                    ) : null}
+                    {repositories.map((repository) => (
+                      <option key={repository.fullName} value={repository.fullName}>
+                        {repository.fullName}{repository.private ? "（私有）" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  aria-label="刷新仓库列表"
+                  className="icon-button bordered"
+                  disabled={!github.connected || repositoryBusy}
+                  onClick={() => void loadRepositories()}
+                  title="刷新仓库列表"
+                  type="button"
+                ><RefreshCw className={repositoryBusy ? "spin" : ""} size={15} /></button>
               </div>
             </label>
           </div>
           <div className="field-grid">
             <label>
               <span>分支</span>
-              <div className="input-with-icon"><GitBranch size={15} /><input onChange={(event) => setSettings({ ...settings, githubBranch: event.target.value })} value={settings.githubBranch} /></div>
+              <div className="select-with-icon">
+                <GitBranch size={15} />
+                <select
+                  disabled={!settings.githubRepository || repositoryBusy}
+                  onChange={(event) => setSettings({ ...settings, githubBranch: event.target.value })}
+                  value={settings.githubBranch}
+                >
+                  {settings.githubBranch && !branches.includes(settings.githubBranch) ? <option value={settings.githubBranch}>{settings.githubBranch}</option> : null}
+                  {branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+                </select>
+              </div>
             </label>
             <label>
               <span>根目录</span>
