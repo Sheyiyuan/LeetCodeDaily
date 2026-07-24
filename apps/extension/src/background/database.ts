@@ -27,6 +27,7 @@ export interface StoredHistoryImport {
   repository: string;
   branch: string;
   rootDirectory: string;
+  includeProblemContent?: boolean;
   currentTitleSlug: string | null;
   lastError: string | null;
   nextAttemptAt: string | null;

@@ -109,6 +109,7 @@ export async function startHistoryImport(): Promise<HistoryImportStatus> {
     repository,
     branch: settings.githubBranch,
     rootDirectory: settings.githubRootDirectory,
+    includeProblemContent: settings.includeProblemContent,
     currentTitleSlug: null,
     lastError: null,
     nextAttemptAt: null,
@@ -259,6 +260,7 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
         path: `${directory}/README.md`,
         content: generateProblemReadme({
           problem,
+          includeProblemContent: job.includeProblemContent !== false,
           solutions: submissions.map((submission) => ({
             language: submission.language,
             submissionId: submission.submissionId,

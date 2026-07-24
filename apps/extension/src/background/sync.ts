@@ -90,7 +90,11 @@ export async function enqueueGitHubSync(
       submissionId: item.submissionId,
       submittedAt: item.submittedAt,
     }));
-  const readme = generateProblemReadme({ problem, solutions });
+  const readme = generateProblemReadme({
+    problem,
+    solutions,
+    includeProblemContent: settings.includeProblemContent,
+  });
   const solution = generateSolutionFile(
     {
       language: submission.language,

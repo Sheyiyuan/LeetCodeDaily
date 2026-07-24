@@ -62,6 +62,26 @@ describe("generateProblemReadme", () => {
     expect(readme).toContain("leetcode-daily:meta");
     expect(readme).toContain('"schemaVersion":1');
   });
+
+  it("omits the problem body while keeping the source link and solutions", () => {
+    const readme = generateProblemReadme({
+      problem,
+      solutions: [
+        {
+          language: "python3",
+          submissionId: "123",
+          submittedAt: "2026-07-24T01:00:00.000Z",
+        },
+      ],
+      includeProblemContent: false,
+    });
+
+    expect(readme).not.toContain("## 题目描述");
+    expect(readme).not.toContain("中文题目");
+    expect(readme).toContain("查看力扣中国站原题");
+    expect(readme).toContain("solution.py");
+    expect(readme).toContain("leetcode-daily:meta");
+  });
 });
 
 describe("generateSolutionFile", () => {

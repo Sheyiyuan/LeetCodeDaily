@@ -5,6 +5,7 @@ const DEFAULTS = {
   githubRepository: null,
   githubBranch: "main",
   githubRootDirectory: "solutions",
+  includeProblemContent: true,
   heatmapPublicEnabled: false,
 } satisfies ExtensionSettings;
 
@@ -25,6 +26,10 @@ export async function readSettings(): Promise<ExtensionSettings> {
       typeof stored.githubRootDirectory === "string"
         ? stored.githubRootDirectory
         : DEFAULTS.githubRootDirectory,
+    includeProblemContent:
+      typeof stored.includeProblemContent === "boolean"
+        ? stored.includeProblemContent
+        : DEFAULTS.includeProblemContent,
     heatmapPublicEnabled:
       typeof stored.heatmapPublicEnabled === "boolean"
         ? stored.heatmapPublicEnabled

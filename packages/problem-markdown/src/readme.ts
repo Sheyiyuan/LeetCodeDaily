@@ -12,6 +12,7 @@ export interface ReadmeSolution {
 export interface ProblemReadmeInput {
   problem: Problem;
   solutions: ReadmeSolution[];
+  includeProblemContent?: boolean;
 }
 
 interface Metadata {
@@ -135,16 +136,18 @@ export function generateProblemReadme(input: ProblemReadmeInput): string {
     .join("\n");
   const metadata = JSON.stringify(metadataFor(input)).replaceAll("--", "—");
 
+  const problemContent =
+    input.includeProblemContent === false
+      ? []
+      : ["", "## 题目描述", "", sanitizeProblemHtml(content)];
+
   return [
     `# ${problem.frontendId}. ${title}`,
     "",
     `> 难度：${problem.difficulty}  `,
     `> 标签：${tags || "—"}  `,
     `> [查看力扣中国站原题](${problem.canonicalUrl})`,
-    "",
-    "## 题目描述",
-    "",
-    sanitizeProblemHtml(content),
+    ...problemContent,
     "",
     "## 已同步解答",
     "",
