@@ -23,12 +23,24 @@ async function tabsWithLeetCode(): Promise<chrome.tabs.Tab[]> {
   });
 }
 
-async function fetchThroughLeetCodePage(body: string): Promise<Response | null> {
+const ALLOWED_URLS = new Set([
+  "https://leetcode.cn/graphql/",
+  "https://leetcode.cn/api/problems/all/",
+]);
+
+async function fetchThroughLeetCodePage(
+  url: string,
+  method: string,
+  body: string | null,
+): Promise<Response | null> {
+  if (!ALLOWED_URLS.has(url)) return null;
   for (const tab of await tabsWithLeetCode()) {
     if (typeof tab.id !== "number") continue;
     try {
       const result = (await chrome.tabs.sendMessage(tab.id, {
         type: "leetcode-proxy-request",
+        url,
+        method,
         body,
       })) as ProxyResponse | undefined;
       if (!result?.ok || typeof result.body !== "string") continue;
@@ -47,9 +59,12 @@ async function leetcodeFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  const url = String(input);
+  const method = init?.method ?? "GET";
   const body = typeof init?.body === "string" ? init.body : null;
-  if (!body) return fetch(input, init);
-  return (await fetchThroughLeetCodePage(body)) ?? fetch(input, init);
+  return (
+    (await fetchThroughLeetCodePage(url, method, body)) ?? fetch(input, init)
+  );
 }
 
 export const leetcodeClient = new LeetCodeCnClient({ fetch: leetcodeFetch });

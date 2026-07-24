@@ -68,3 +68,34 @@ export const submissionDetailDataSchema = z.object({
     })
     .nullable(),
 });
+
+export const solvedProblemListSchema = z.object({
+  user_name: z.string(),
+  stat_status_pairs: z.array(
+    z.object({
+      status: z.string().nullable(),
+      stat: z.object({
+        question_id: z.number().int(),
+        question__title_slug: z.string(),
+        frontend_question_id: z.string(),
+      }),
+    }),
+  ),
+});
+
+export const submissionListDataSchema = z.object({
+  submissionList: z.object({
+    lastKey: z.string().nullable(),
+    hasNext: z.boolean(),
+    submissions: z.array(
+      z.object({
+        id: z.string(),
+        titleSlug: z.string(),
+        statusDisplay: z.string(),
+        lang: z.string(),
+        timestamp: z.number().int(),
+        frontendId: z.string(),
+      }),
+    ),
+  }),
+});

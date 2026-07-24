@@ -12,21 +12,33 @@ let acceptedObservedAt: string | null = null;
 let submissionIdAtClick: string | null = null;
 let expiryTimer: number | null = null;
 
+const ALLOWED_PROXY_URLS = new Set([
+  "https://leetcode.cn/graphql/",
+  "https://leetcode.cn/api/problems/all/",
+]);
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (
     !message ||
     message.type !== "leetcode-proxy-request" ||
-    typeof message.body !== "string"
+    typeof message.url !== "string" ||
+    !ALLOWED_PROXY_URLS.has(message.url) ||
+    (message.method !== "GET" && message.method !== "POST") ||
+    (message.body !== null && typeof message.body !== "string")
   ) {
     return false;
   }
 
-  void fetch("https://leetcode.cn/graphql/", {
-    method: "POST",
+  const proxyInit: RequestInit = {
+    method: message.method,
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: message.body,
-  })
+  };
+  if (message.method === "POST") {
+    proxyInit.headers = { "Content-Type": "application/json" };
+    proxyInit.body = message.body;
+  }
+
+  void fetch(message.url, proxyInit)
     .then(async (response) =>
       sendResponse({
         ok: true,

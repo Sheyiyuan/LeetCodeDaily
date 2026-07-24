@@ -90,4 +90,100 @@ describe("LeetCodeCnClient", () => {
       hard: 2,
     });
   });
+
+  it("loads solved problem slugs from the authenticated Chinese REST endpoint", async () => {
+    let input: RequestInfo | URL | undefined;
+    const client = new LeetCodeCnClient({
+      fetch: async (nextInput) => {
+        input = nextInput;
+        return jsonResponse({
+          user_name: "user-slug",
+          stat_status_pairs: [
+            {
+              status: "ac",
+              stat: {
+                question_id: 1,
+                question__title_slug: "two-sum",
+                frontend_question_id: "1",
+              },
+            },
+            {
+              status: null,
+              stat: {
+                question_id: 2,
+                question__title_slug: "add-two-numbers",
+                frontend_question_id: "2",
+              },
+            },
+          ],
+        });
+      },
+    });
+
+    await expect(client.getSolvedProblems()).resolves.toEqual([
+      { questionId: "1", frontendId: "1", titleSlug: "two-sum" },
+    ]);
+    expect(input).toBe("https://leetcode.cn/api/problems/all/");
+  });
+
+  it("keeps the latest accepted submission for each language", async () => {
+    let requestCount = 0;
+    const client = new LeetCodeCnClient({
+      fetch: async () => {
+        requestCount += 1;
+        return jsonResponse({
+          data: {
+            submissionList: {
+              lastKey: null,
+              hasNext: false,
+              submissions: [
+                {
+                  id: "100",
+                  titleSlug: "two-sum",
+                  statusDisplay: "Accepted",
+                  lang: "typescript",
+                  timestamp: 100,
+                  frontendId: "1",
+                },
+                {
+                  id: "101",
+                  titleSlug: "two-sum",
+                  statusDisplay: "Accepted",
+                  lang: "typescript",
+                  timestamp: 200,
+                  frontendId: "1",
+                },
+                {
+                  id: "102",
+                  titleSlug: "two-sum",
+                  statusDisplay: "Accepted",
+                  lang: "python3",
+                  timestamp: 150,
+                  frontendId: "1",
+                },
+              ],
+            },
+          },
+        });
+      },
+    });
+
+    await expect(client.getLatestAcceptedByLanguage("two-sum")).resolves.toEqual([
+      {
+        id: "102",
+        titleSlug: "two-sum",
+        language: "python3",
+        timestamp: 150,
+        frontendId: "1",
+      },
+      {
+        id: "101",
+        titleSlug: "two-sum",
+        language: "typescript",
+        timestamp: 200,
+        frontendId: "1",
+      },
+    ]);
+    expect(requestCount).toBe(1);
+  });
 });

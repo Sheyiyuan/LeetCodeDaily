@@ -57,3 +57,32 @@ export const SUBMISSION_DETAIL_QUERY = /* GraphQL */ `
     }
   }
 `;
+
+export const SUBMISSION_LIST_QUERY = /* GraphQL */ `
+  query submissionList(
+    $offset: Int!
+    $limit: Int!
+    $lastKey: String
+    $questionSlug: String!
+    $status: SubmissionStatusEnum
+  ) {
+    submissionList(
+      offset: $offset
+      limit: $limit
+      lastKey: $lastKey
+      questionSlug: $questionSlug
+      status: $status
+    ) {
+      lastKey
+      hasNext
+      submissions {
+        id
+        titleSlug
+        statusDisplay
+        lang
+        timestamp
+        frontendId
+      }
+    }
+  }
+`;
