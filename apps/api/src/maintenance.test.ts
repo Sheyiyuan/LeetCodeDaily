@@ -17,10 +17,13 @@ describe("cleanupExpiredRecords", () => {
 
     await cleanupExpiredRecords(env, new Date("2026-07-24T00:00:00.000Z"));
 
-    expect(statements).toHaveLength(4);
+    expect(statements).toHaveLength(7);
     expect(statements.join("\n")).toContain("DELETE FROM auth_attempts");
     expect(statements.join("\n")).toContain("DELETE FROM auth_grants");
     expect(statements.join("\n")).toContain("DELETE FROM sessions");
     expect(statements.join("\n")).toContain("DELETE FROM api_rate_limits");
+    expect(statements.join("\n")).toContain("DELETE FROM activity_sync_batches");
+    expect(statements.join("\n")).toContain("DELETE FROM activity_sync_days");
+    expect(statements.join("\n")).toContain("DELETE FROM activity_syncs");
   });
 });

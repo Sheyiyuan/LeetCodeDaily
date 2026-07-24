@@ -20,5 +20,20 @@ export async function cleanupExpiredRecords(
     env.DB.prepare("DELETE FROM api_rate_limits WHERE expires_at <= ?").bind(
       timestamp,
     ),
+    env.DB.prepare(
+      `DELETE FROM activity_sync_batches
+        WHERE sync_id IN (
+          SELECT sync_id FROM activity_syncs WHERE expires_at <= ?
+        )`,
+    ).bind(timestamp),
+    env.DB.prepare(
+      `DELETE FROM activity_sync_days
+        WHERE sync_id IN (
+          SELECT sync_id FROM activity_syncs WHERE expires_at <= ?
+        )`,
+    ).bind(timestamp),
+    env.DB.prepare("DELETE FROM activity_syncs WHERE expires_at <= ?").bind(
+      timestamp,
+    ),
   ]);
 }
