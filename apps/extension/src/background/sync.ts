@@ -17,20 +17,8 @@ import { githubAccessToken } from "./auth";
 import { setFailureBadge } from "./badge";
 import { database, type StoredSyncJob } from "./database";
 import { githubSyncFailureMessage } from "./github-errors";
+import { joinRepositoryPath } from "./repository-path";
 import { readSettings } from "./settings";
-
-function safeSegment(value: string): string {
-  const normalized = value.trim().replaceAll(/[^a-zA-Z0-9._-]+/g, "-");
-  return normalized.replaceAll(/^-+|-+$/g, "");
-}
-
-function joinPath(...segments: string[]): string {
-  return segments
-    .flatMap((segment) => segment.split("/"))
-    .map(safeSegment)
-    .filter(Boolean)
-    .join("/");
-}
 
 export function hasEquivalentSyncJob(
   jobs: Array<
@@ -91,28 +79,19 @@ export async function enqueueGitHubSync(
 
   const db = await database();
   const existingJobs = await db.getAll("syncJobs");
-  const solutions = (await db.getAll("submissions"))
-    .filter((item) => item.frontendId === submission.frontendId)
-    .map((item) => ({
-      language: item.language,
-      submissionId: item.submissionId,
-      submittedAt: item.submittedAt,
-    }));
   const readme = generateProblemReadme({
     problem,
-    solutions,
-    includeProblemContent: settings.includeProblemContent,
   });
   const solution = generateSolutionFile(
     {
       language: submission.language,
+      titleSlug: problem.titleSlug,
       problemUrl: problem.canonicalUrl,
-      submissionId: submission.submissionId,
       submittedAt: submission.submittedAt,
     },
     submission.code,
   );
-  const directory = joinPath(
+  const directory = joinRepositoryPath(
     settings.githubRootDirectory,
     `${problem.frontendId}-${problem.titleSlug}`,
   );

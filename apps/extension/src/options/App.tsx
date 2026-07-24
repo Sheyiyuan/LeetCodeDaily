@@ -34,8 +34,7 @@ const FALLBACK: ExtensionSettings = {
   timezone: "Asia/Shanghai",
   githubRepository: null,
   githubBranch: "main",
-  githubRootDirectory: "solutions",
-  includeProblemContent: true,
+  githubRootDirectory: "",
   heatmapPublicEnabled: false,
 };
 
@@ -391,22 +390,8 @@ export function App() {
             </label>
             <label>
               <span>根目录</span>
-              <div className="input-with-icon"><Code2 size={15} /><input onChange={(event) => setSettings({ ...settings, githubRootDirectory: event.target.value })} placeholder="solutions" value={settings.githubRootDirectory} /></div>
+                <div className="input-with-icon"><Code2 size={15} /><input onChange={(event) => setSettings({ ...settings, githubRootDirectory: event.target.value })} placeholder="留空表示仓库根目录" value={settings.githubRootDirectory} /></div>
             </label>
-          </div>
-          <div className="toggle-row">
-            <div>
-              <strong>同步完整题目正文</strong>
-              <small>关闭后 README 仅保留题目信息、原题链接和解答索引</small>
-            </div>
-            <button
-              aria-checked={settings.includeProblemContent}
-              aria-label="同步完整题目正文"
-              className={`switch ${settings.includeProblemContent ? "on" : ""}`}
-              onClick={() => setSettings({ ...settings, includeProblemContent: !settings.includeProblemContent })}
-              role="switch"
-              type="button"
-            ><span /></button>
           </div>
         </div>
       </section>

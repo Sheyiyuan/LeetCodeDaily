@@ -4,8 +4,7 @@ const DEFAULTS = {
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
   githubRepository: null,
   githubBranch: "main",
-  githubRootDirectory: "solutions",
-  includeProblemContent: true,
+  githubRootDirectory: "",
   heatmapPublicEnabled: false,
 } satisfies ExtensionSettings;
 
@@ -26,10 +25,6 @@ export async function readSettings(): Promise<ExtensionSettings> {
       typeof stored.githubRootDirectory === "string"
         ? stored.githubRootDirectory
         : DEFAULTS.githubRootDirectory,
-    includeProblemContent:
-      typeof stored.includeProblemContent === "boolean"
-        ? stored.includeProblemContent
-        : DEFAULTS.includeProblemContent,
     heatmapPublicEnabled:
       typeof stored.heatmapPublicEnabled === "boolean"
         ? stored.heatmapPublicEnabled

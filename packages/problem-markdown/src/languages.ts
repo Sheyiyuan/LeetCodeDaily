@@ -43,9 +43,28 @@ function commentPrefix(extension: string): string {
 
 export interface SolutionHeader {
   language: string;
+  titleSlug: string;
   problemUrl: string;
-  submissionId: string;
   submittedAt: string;
+}
+
+function safeTitleSlug(value: string): string {
+  return (
+    value
+      .trim()
+      .replaceAll(/[^a-zA-Z0-9._-]+/g, "-")
+      .replaceAll(/^-+|-+$/g, "") || "solution"
+  );
+}
+
+export function formatAcceptedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: false,
+  }).format(date);
 }
 
 export function generateSolutionFile(
@@ -55,13 +74,11 @@ export function generateSolutionFile(
   const extension = languageExtension(header.language);
   const prefix = commentPrefix(extension);
   const lines = [
-    `${prefix} LeetCodeDaily`,
     `${prefix} Problem: ${header.problemUrl}`,
-    `${prefix} Submission: ${header.submissionId}`,
-    `${prefix} Accepted at: ${header.submittedAt}`,
+    `${prefix} Accepted at: ${formatAcceptedAt(header.submittedAt)}`,
   ];
   return {
-    fileName: `solution.${extension}`,
+    fileName: `${safeTitleSlug(header.titleSlug)}.${extension}`,
     content: `${lines.join("\n")}\n\n${code.replace(/\s+$/, "")}\n`,
   };
 }

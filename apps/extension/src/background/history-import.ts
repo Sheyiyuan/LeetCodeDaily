@@ -19,6 +19,7 @@ import { githubAccessToken } from "./auth";
 import { setFailureBadge } from "./badge";
 import { database, type StoredHistoryImport } from "./database";
 import { leetcodeClient } from "./leetcode";
+import { joinRepositoryPath } from "./repository-path";
 import { readSettings } from "./settings";
 
 export const HISTORY_IMPORT_ALARM = "history-import-work";
@@ -26,21 +27,6 @@ const IMPORT_ID = "history-import";
 const BATCH_SIZE = 20;
 const PROBLEMS_PER_WAKE = 2;
 let activeRun: Promise<void> | null = null;
-
-function safeSegment(value: string): string {
-  return value
-    .trim()
-    .replaceAll(/[^a-zA-Z0-9._-]+/g, "-")
-    .replaceAll(/^-+|-+$/g, "");
-}
-
-function joinPath(...segments: string[]): string {
-  return segments
-    .flatMap((segment) => segment.split("/"))
-    .map(safeSegment)
-    .filter(Boolean)
-    .join("/");
-}
 
 export function historyImportStatus(
   job: StoredHistoryImport | undefined,
@@ -109,7 +95,6 @@ export async function startHistoryImport(): Promise<HistoryImportStatus> {
     repository,
     branch: settings.githubBranch,
     rootDirectory: settings.githubRootDirectory,
-    includeProblemContent: settings.includeProblemContent,
     currentTitleSlug: null,
     lastError: null,
     nextAttemptAt: null,
@@ -251,7 +236,7 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
         ),
       ),
     ]);
-    const directory = joinPath(
+    const directory = joinRepositoryPath(
       job.rootDirectory,
       `${problem.frontendId}-${problem.titleSlug}`,
     );
@@ -260,20 +245,14 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
         path: `${directory}/README.md`,
         content: generateProblemReadme({
           problem,
-          includeProblemContent: job.includeProblemContent !== false,
-          solutions: submissions.map((submission) => ({
-            language: submission.language,
-            submissionId: submission.submissionId,
-            submittedAt: submission.submittedAt,
-          })),
         }),
       },
       ...submissions.map((submission) => {
         const solution = generateSolutionFile(
           {
             language: submission.language,
+            titleSlug: problem.titleSlug,
             problemUrl: problem.canonicalUrl,
-            submissionId: submission.submissionId,
             submittedAt: submission.submittedAt,
           },
           submission.code,

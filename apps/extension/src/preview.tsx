@@ -54,8 +54,7 @@ const settings: ExtensionSettings = {
   timezone: "Asia/Shanghai",
   githubRepository: "yuhhhy/leetcode-solutions",
   githubBranch: "main",
-  githubRootDirectory: "solutions",
-  includeProblemContent: true,
+  githubRootDirectory: "",
   heatmapPublicEnabled: true,
 };
 

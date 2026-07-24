@@ -75,7 +75,6 @@ export interface ExtensionSettings {
   githubRepository: string | null;
   githubBranch: string;
   githubRootDirectory: string;
-  includeProblemContent: boolean;
   heatmapPublicEnabled: boolean;
 }
 

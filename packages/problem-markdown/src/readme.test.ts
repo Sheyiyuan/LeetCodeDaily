@@ -45,42 +45,29 @@ describe("sanitizeProblemHtml", () => {
 });
 
 describe("generateProblemReadme", () => {
-  it("uses Chinese content and embeds versioned machine metadata", () => {
+  it("keeps only the Chinese title and plain problem description", () => {
     const readme = generateProblemReadme({
       problem,
-      solutions: [
-        {
-          language: "C++",
-          submissionId: "123",
-          submittedAt: "2026-07-24T01:00:00.000Z",
-        },
-      ],
     });
-    expect(readme).toContain("# 1. 两数之和");
-    expect(readme).toContain("中文题目");
+    expect(readme).toBe("**两数之和**\n\n中文题目\n");
+    expect(readme).not.toContain("#");
     expect(readme).not.toContain("English");
-    expect(readme).toContain("leetcode-daily:meta");
-    expect(readme).toContain('"schemaVersion":1');
+    expect(readme).not.toContain("solution");
+    expect(readme).not.toContain("查看力扣中国站原题");
   });
 
-  it("omits the problem body while keeping the source link and solutions", () => {
+  it("converts safe HTML blocks and inline emphasis to readable text", () => {
     const readme = generateProblemReadme({
-      problem,
-      solutions: [
-        {
-          language: "python3",
-          submissionId: "123",
-          submittedAt: "2026-07-24T01:00:00.000Z",
-        },
-      ],
-      includeProblemContent: false,
+      problem: {
+        ...problem,
+        translatedContentHtml:
+          "<p>给定 <strong>nums</strong>。</p><p>示例：<em>target</em> = 9</p><ul><li>返回下标</li></ul>",
+      },
     });
-
-    expect(readme).not.toContain("## 题目描述");
-    expect(readme).not.toContain("中文题目");
-    expect(readme).toContain("查看力扣中国站原题");
-    expect(readme).toContain("solution.py");
-    expect(readme).toContain("leetcode-daily:meta");
+    expect(readme).toContain("给定 **nums**。");
+    expect(readme).toContain("示例：*target* = 9");
+    expect(readme).toContain("返回下标");
+    expect(readme).not.toContain("<p>");
   });
 });
 
@@ -89,14 +76,17 @@ describe("generateSolutionFile", () => {
     const result = generateSolutionFile(
       {
         language: "python3",
+        titleSlug: problem.titleSlug,
         problemUrl: problem.canonicalUrl,
-        submissionId: "123",
         submittedAt: "2026-07-24T01:00:00.000Z",
       },
       "class Solution:\n    pass\n",
     );
-    expect(result.fileName).toBe("solution.py");
-    expect(result.content).toContain("# Submission: 123");
+    expect(result.fileName).toBe("two-sum.py");
+    expect(result.content).toContain("# Problem: https://leetcode.cn/problems/two-sum/");
+    expect(result.content).toContain("# Accepted at: ");
+    expect(result.content).not.toContain("Submission:");
+    expect(result.content).not.toContain("LeetCodeDaily");
     expect(result.content).toContain("class Solution:\n    pass");
   });
 });
