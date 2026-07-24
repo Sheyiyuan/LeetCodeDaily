@@ -6,8 +6,8 @@
 
 - 读取力扣中国站登录状态、头像与难度题量，不回退到 `leetcode.com`
 - 监听 Accepted，补全提交代码与题目信息并保存在 IndexedDB
-- 中文题目优先的 README、完整题目正文、安全 HTML 清理和外链图片
-- 题解文件内保存提交 ID、提交时间和题目链接注释
+- README 只保留中文题名和题目描述，不生成 Markdown 标题、链接或机器元数据
+- 题解文件按题目 slug 命名，例如 `two-sum.ts`，只保留题目链接和可读提交时间注释
 - 使用 GitHub Git Data API，在一次 commit 中原子更新 README 与题解
 - GitHub App Web Flow、PKCE、一次性授权凭证和 access token 自动续期
 - refresh token 仅在 Worker 端以 AES-GCM 加密保存
@@ -76,6 +76,14 @@ GitHub App 需要：
 - Repository permission：`Contents: Read and write`
 - 开启 expiring user access tokens
 - 安装范围由用户选择目标仓库
+
+题目目录默认直接放在仓库根目录（根目录设置可以留空），例如：
+
+```text
+1-two-sum/
+  README.md
+  two-sum.cpp
+```
 
 如果在 GitHub App 创建后才把 `Contents` 从只读改为 `Read and write`，还需要在
 GitHub 的 App 安装设置中批准新增权限。批准后，在扩展设置页断开并重新连接
