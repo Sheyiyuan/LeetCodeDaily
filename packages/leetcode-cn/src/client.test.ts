@@ -66,4 +66,28 @@ describe("LeetCodeCnClient", () => {
     expect(input).toBe("https://leetcode.cn/graphql/");
     expect(init?.credentials).toBe("include");
   });
+
+  it("maps the Chinese accepted-question progress response", async () => {
+    const client = new LeetCodeCnClient({
+      fetch: async () =>
+        jsonResponse({
+          data: {
+            userProfileUserQuestionProgressV2: {
+              numAcceptedQuestions: [
+                { difficulty: "EASY", count: 12 },
+                { difficulty: "MEDIUM", count: 8 },
+                { difficulty: "HARD", count: 2 },
+              ],
+            },
+          },
+        }),
+    });
+
+    await expect(client.getSolvedStats("yuhhhy")).resolves.toMatchObject({
+      total: 22,
+      easy: 12,
+      medium: 8,
+      hard: 2,
+    });
+  });
 });

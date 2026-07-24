@@ -31,12 +31,10 @@ export const QUESTION_QUERY = /* GraphQL */ `
 // Requires authenticated validation on leetcode.cn before release.
 export const SOLVED_STATS_QUERY = /* GraphQL */ `
   query userProfileUserQuestionProgressV2($userSlug: String!) {
-    matchedUser(username: $userSlug) {
-      submitStats {
-        acSubmissionNum {
-          difficulty
-          count
-        }
+    userProfileUserQuestionProgressV2(userSlug: $userSlug) {
+      numAcceptedQuestions {
+        difficulty
+        count
       }
     }
   }

@@ -40,16 +40,14 @@ export const questionDataSchema = z.object({
 });
 
 const submissionCountSchema = z.object({
-  difficulty: z.enum(["All", "Easy", "Medium", "Hard"]),
+  difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
   count: z.number().int().nonnegative(),
 });
 
 export const solvedStatsDataSchema = z.object({
-  matchedUser: z
+  userProfileUserQuestionProgressV2: z
     .object({
-      submitStats: z.object({
-        acSubmissionNum: z.array(submissionCountSchema),
-      }),
+      numAcceptedQuestions: z.array(submissionCountSchema),
     })
     .nullable(),
 });

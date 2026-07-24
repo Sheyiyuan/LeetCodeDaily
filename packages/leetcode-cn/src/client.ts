@@ -91,7 +91,7 @@ export class LeetCodeCnClient {
       { userSlug: username },
       solvedStatsDataSchema,
     );
-    if (!data.matchedUser) {
+    if (!data.userProfileUserQuestionProgressV2) {
       throw new LeetCodeApiError(
         "INVALID_RESPONSE",
         `User not found: ${username}`,
@@ -100,16 +100,16 @@ export class LeetCodeCnClient {
     }
 
     const counts = new Map(
-      data.matchedUser.submitStats.acSubmissionNum.map((item) => [
+      data.userProfileUserQuestionProgressV2.numAcceptedQuestions.map((item) => [
         item.difficulty,
         item.count,
       ]),
     );
     return {
-      total: counts.get("All") ?? 0,
-      easy: counts.get("Easy") ?? 0,
-      medium: counts.get("Medium") ?? 0,
-      hard: counts.get("Hard") ?? 0,
+      total: [...counts.values()].reduce((sum, count) => sum + count, 0),
+      easy: counts.get("EASY") ?? 0,
+      medium: counts.get("MEDIUM") ?? 0,
+      hard: counts.get("HARD") ?? 0,
       observedAt: new Date().toISOString(),
     };
   }
