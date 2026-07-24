@@ -9,19 +9,11 @@ import type {
 } from "../shared/messages";
 import { localDateForInstant } from "@leetcode-daily/domain";
 import { observeAccepted, retryCandidates } from "./candidates";
-import {
-  connectGitHub,
-  deleteGitHubAccount,
-  disconnectGitHub,
-  readGitHubAuth,
-} from "./auth";
+import { connectGitHub, deleteGitHubAccount, disconnectGitHub, readGitHubAuth } from "./auth";
 import { syncActivityToCloud } from "./activity-sync";
 import { rebuildDailyActivity } from "./activity-ledger";
 import { readDashboard, refreshDashboard } from "./dashboard";
-import {
-  readAuthorizedRepositories,
-  readRepositoryBranches,
-} from "./repositories";
+import { readAuthorizedRepositories, readRepositoryBranches } from "./repositories";
 import { readSettings, writeSettings } from "./settings";
 import { retrySyncJobs } from "./sync";
 import { clearDatabase, countCandidateStates, database } from "./database";
@@ -46,9 +38,7 @@ const RETRY_ALARM = "retry-failed-work";
 async function refreshDashboardAndBackfill(): Promise<DashboardState> {
   const dashboard = await refreshDashboard();
   if (dashboard.account?.isSignedIn && dashboard.account.username) {
-    await ensureHistoryActivityBackfill(dashboard.account.username).catch(
-      () => undefined,
-    );
+    await ensureHistoryActivityBackfill(dashboard.account.username).catch(() => undefined);
   }
   return readDashboard();
 }
@@ -82,6 +72,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   void chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 });
   void retryWork(false);
+  void refreshDashboardAndBackfill().catch(() => undefined);
   void readHistoryImport().then((status) => {
     if (status.state === "running") void runHistoryImport();
   });
