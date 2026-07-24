@@ -18,7 +18,7 @@
     }
   ],
   "vars": {
-    "ALLOWED_EXTENSION_ORIGIN": "chrome-extension://replace-after-store-id",
+    "ALLOWED_EXTENSION_ORIGIN": "chrome-extension://ihmpbdgefkfolkohjccehkchlafmjfcc",
     "PUBLIC_BASE_URL": "https://leetcode-daily-api.deshengl331.workers.dev"
   }
 }
