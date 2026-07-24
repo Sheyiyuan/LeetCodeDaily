@@ -67,8 +67,7 @@ export function sanitizeProblemHtml(html: string): string {
     },
     exclusiveFilter(frame) {
       return (
-        (frame.tag === "a" && !frame.attribs.href) ||
-        (frame.tag === "img" && !frame.attribs.src)
+        (frame.tag === "a" && !frame.attribs.href) || (frame.tag === "img" && !frame.attribs.src)
       );
     },
   }).trim();
@@ -83,31 +82,25 @@ function decodeHtmlEntities(value: string): string {
     nbsp: " ",
     quot: '"',
   };
-  return value.replace(
-    /&(#x[\da-f]+|#\d+|[a-z]+);/gi,
-    (entity, name: string) => {
-      if (name.toLowerCase().startsWith("#x")) {
-        return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
-      }
-      if (name.startsWith("#")) {
-        return String.fromCodePoint(Number.parseInt(name.slice(1), 10));
-      }
-      return entities[name.toLowerCase()] ?? entity;
-    },
-  );
+  return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, name: string) => {
+    if (name.toLowerCase().startsWith("#x")) {
+      return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
+    }
+    if (name.startsWith("#")) {
+      return String.fromCodePoint(Number.parseInt(name.slice(1), 10));
+    }
+    return entities[name.toLowerCase()] ?? entity;
+  });
 }
 
 function appendNewline(value: string): string {
   return `${value.replace(/[ \t]+$/g, "")}\n`;
 }
 
-/** Converts the sanitized LeetCode HTML into readable text without headings or links. */
+/** Converts sanitized LeetCode HTML into readable text without Markdown syntax. */
 export function problemHtmlToPlainText(html: string): string {
   const tokens = sanitizeProblemHtml(html).match(/<[^>]*>|[^<]+/g) ?? [];
   let output = "";
-  let strongDepth = 0;
-  let emphasisDepth = 0;
-  let codeDepth = 0;
 
   for (const token of tokens) {
     if (!token.startsWith("<")) {
@@ -120,16 +113,7 @@ export function problemHtmlToPlainText(html: string): string {
     const closing = /^<\//.test(token);
 
     if (closing) {
-      if (tag === "strong" || tag === "b") {
-        if (strongDepth > 0) output += "**";
-        strongDepth = Math.max(0, strongDepth - 1);
-      } else if (tag === "em" || tag === "i") {
-        if (emphasisDepth > 0) output += "*";
-        emphasisDepth = Math.max(0, emphasisDepth - 1);
-      } else if (tag === "code") {
-        if (codeDepth > 0) output += "`";
-        codeDepth = Math.max(0, codeDepth - 1);
-      } else if (["p", "div", "li", "tr", "blockquote", "pre"].includes(tag)) {
+      if (["p", "div", "li", "tr", "blockquote", "pre"].includes(tag)) {
         output = appendNewline(output);
       }
       continue;
@@ -137,15 +121,6 @@ export function problemHtmlToPlainText(html: string): string {
 
     if (tag === "br") {
       output = appendNewline(output);
-    } else if (tag === "strong" || tag === "b") {
-      output += "**";
-      strongDepth += 1;
-    } else if (tag === "em" || tag === "i") {
-      output += "*";
-      emphasisDepth += 1;
-    } else if (tag === "code") {
-      output += "`";
-      codeDepth += 1;
     } else if (["p", "div", "li", "tr", "blockquote", "pre"].includes(tag)) {
       if (output && !output.endsWith("\n")) output = appendNewline(output);
     }
@@ -160,7 +135,6 @@ export function problemHtmlToPlainText(html: string): string {
 export function generateProblemReadme(input: ProblemReadmeInput): string {
   const { problem } = input;
   const title = problem.translatedTitle?.trim() || problem.title;
-  const content =
-    problem.translatedContentHtml?.trim() || problem.contentHtml.trim();
-  return `**${title}**\n\n${problemHtmlToPlainText(content)}\n`;
+  const content = problem.translatedContentHtml?.trim() || problem.contentHtml.trim();
+  return `${title}\n\n${problemHtmlToPlainText(content)}\n`;
 }

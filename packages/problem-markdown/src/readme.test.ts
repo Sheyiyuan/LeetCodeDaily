@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Problem } from "@leetcode-daily/domain";
-import {
-  generateProblemReadme,
-  generateSolutionFile,
-  sanitizeProblemHtml,
-} from ".";
+import { generateProblemReadme, generateSolutionFile, sanitizeProblemHtml } from ".";
 
 const problem: Problem = {
   site: "leetcode.cn",
@@ -18,9 +14,7 @@ const problem: Problem = {
   contentHtml: "<p>English</p>",
   translatedContentHtml:
     '<p onclick="steal()">中文题目</p><img src="/uploads/example.png" onerror="steal()"><script>alert(1)</script>',
-  topicTags: [
-    { slug: "array", name: "Array", translatedName: "数组" },
-  ],
+  topicTags: [{ slug: "array", name: "Array", translatedName: "数组" }],
   canonicalUrl: "https://leetcode.cn/problems/two-sum/",
 };
 
@@ -49,14 +43,14 @@ describe("generateProblemReadme", () => {
     const readme = generateProblemReadme({
       problem,
     });
-    expect(readme).toBe("**两数之和**\n\n中文题目\n");
+    expect(readme).toBe("两数之和\n\n中文题目\n");
     expect(readme).not.toContain("#");
     expect(readme).not.toContain("English");
     expect(readme).not.toContain("solution");
     expect(readme).not.toContain("查看力扣中国站原题");
   });
 
-  it("converts safe HTML blocks and inline emphasis to readable text", () => {
+  it("converts safe HTML blocks and formatting to plain text", () => {
     const readme = generateProblemReadme({
       problem: {
         ...problem,
@@ -64,10 +58,11 @@ describe("generateProblemReadme", () => {
           "<p>给定 <strong>nums</strong>。</p><p>示例：<em>target</em> = 9</p><ul><li>返回下标</li></ul>",
       },
     });
-    expect(readme).toContain("给定 **nums**。");
-    expect(readme).toContain("示例：*target* = 9");
+    expect(readme).toContain("给定 nums。");
+    expect(readme).toContain("示例：target = 9");
     expect(readme).toContain("返回下标");
     expect(readme).not.toContain("<p>");
+    expect(readme).not.toMatch(/[\*`]/);
   });
 });
 
