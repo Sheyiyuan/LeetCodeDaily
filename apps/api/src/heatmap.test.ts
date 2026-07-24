@@ -42,6 +42,26 @@ describe("renderHeatmapDocument", () => {
     expect(svg).toContain("prefers-color-scheme:dark");
     expect(svg).toContain("Updated not synced");
   });
+
+  it("supports a rolling window ending at the latest activity date", () => {
+    const svg = renderHeatmapDocument({
+      login: "octocat",
+      year: 2026,
+      endDate: "2026-07-25",
+      rows: [
+        {
+          local_date: "2026-07-25",
+          accepted_submission_count: 1,
+          distinct_problem_count: 1,
+        },
+      ],
+      updatedAt: "2026-07-25T00:00:00.000Z",
+      theme: "light",
+    });
+
+    expect(svg).toContain("2025-07-26 to 2026-07-25");
+    expect(svg).toContain('fill="var(--level-1)" opacity="1"');
+  });
 });
 
 describe("renderHeatmapError", () => {

@@ -14,6 +14,7 @@ interface HeatmapDocumentInput {
   rows: ActivityRow[];
   updatedAt: string | null;
   theme: HeatmapTheme;
+  endDate?: string;
 }
 
 const LIGHT_COLORS = {
@@ -21,14 +22,14 @@ const LIGHT_COLORS = {
   primary: "#24292f",
   secondary: "#57606a",
   muted: "#6e7781",
-  levels: ["#ebedf0", "#c6e48b", "#7bc96f", "#239a3b", "#196127"],
+  levels: ["#ebedf0", "#ffd8bf", "#ff9f7a", "#f05a3c", "#b42318"],
 };
 const DARK_COLORS = {
   background: "#0d1117",
   primary: "#f0f6fc",
   secondary: "#8b949e",
   muted: "#6e7681",
-  levels: ["#21262d", "#0e4429", "#006d32", "#26a641", "#39d353"],
+  levels: ["#2d1b1b", "#6e241b", "#a83a25", "#e85d3f", "#ff8a65"],
 };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -89,15 +90,19 @@ function statusSvg(title: string, message: string, theme: HeatmapTheme): string 
 export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
   const counts = new Map(input.rows.map((row) => [row.local_date, row.distinct_problem_count]));
   const acceptedTotal = input.rows.reduce((sum, row) => sum + row.accepted_submission_count, 0);
-  const firstDay = dateAtUtc(input.year, 0, 1);
-  const lastDay = dateAtUtc(input.year, 11, 31);
+  const rolling = Boolean(input.endDate);
+  const lastDay = input.endDate
+    ? new Date(`${input.endDate}T00:00:00Z`)
+    : dateAtUtc(input.year, 11, 31);
+  const firstDay = input.endDate ? new Date(lastDay) : dateAtUtc(input.year, 0, 1);
+  if (input.endDate) firstDay.setUTCDate(firstDay.getUTCDate() - 364);
   const gridStart = new Date(firstDay);
   gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
   const gridEnd = new Date(lastDay);
-  gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
+  if (!rolling) gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
 
   const cell = 20;
-  const gap = 4;
+  const gap = 3;
   const left = 64;
   const top = 30;
   const cells: string[] = [];
@@ -105,23 +110,38 @@ export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
   for (let date = new Date(gridStart); date <= gridEnd; date.setUTCDate(date.getUTCDate() + 1)) {
     const week = Math.floor((date.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1_000));
     const day = date.getUTCDay();
-    const inYear = date.getUTCFullYear() === input.year;
-    const count = inYear ? (counts.get(dateKey(date)) ?? 0) : 0;
+    const inWindow = rolling
+      ? date >= firstDay && date <= lastDay
+      : date.getUTCFullYear() === input.year;
+    const count = inWindow ? (counts.get(dateKey(date)) ?? 0) : 0;
     cells.push(
-      `<rect class="activity-cell" x="${left + week * (cell + gap)}" y="${top + day * (cell + gap)}" width="${cell}" height="${cell}" rx="2" fill="var(--level-${activityLevel(count)})" opacity="${inYear ? 1 : 0}"/>`,
+      `<rect class="activity-cell" x="${left + week * (cell + gap)}" y="${top + day * (cell + gap)}" width="${cell}" height="${cell}" rx="2" fill="var(--level-${activityLevel(count)})" opacity="${inWindow ? 1 : 0}"/>`,
     );
   }
 
-  const monthLabels = MONTHS.map((month, index) => {
-    const first = dateAtUtc(input.year, index, 1);
+  const monthLabelStart = new Date(firstDay);
+  monthLabelStart.setUTCDate(1);
+  if (rolling && monthLabelStart < firstDay) {
+    monthLabelStart.setUTCMonth(monthLabelStart.getUTCMonth() + 1);
+  }
+  const monthLabels: string[] = [];
+  for (
+    let first = new Date(monthLabelStart);
+    first <= lastDay;
+    first.setUTCMonth(first.getUTCMonth() + 1)
+  ) {
+    const month = MONTHS[first.getUTCMonth()];
     const week = Math.floor((first.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1_000));
-    return `<text x="${left + week * (cell + gap)}" y="18" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">${month}</text>`;
-  }).join("");
+    monthLabels.push(
+      `<text x="${left + week * (cell + gap)}" y="18" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">${month}</text>`,
+    );
+  }
   const summary = acceptedTotal > 0 ? `${acceptedTotal} accepted` : "No activity yet";
   const updated = input.updatedAt
     ? new Date(input.updatedAt).toISOString().slice(0, 10)
     : "not synced";
-  const ariaLabel = `${input.login} LeetCode activity for ${input.year}: ${summary}; Updated ${updated}`;
+  const period = input.endDate ? `${dateKey(firstDay)} to ${dateKey(lastDay)}` : String(input.year);
+  const ariaLabel = `${input.login} LeetCode activity for ${period}: ${summary}; Updated ${updated}`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="196" viewBox="0 0 1360 196" role="img" aria-label="${escapeXml(ariaLabel)}">
   <title>${escapeXml(ariaLabel)}</title>
@@ -140,6 +160,7 @@ export async function renderHeatmap(
   year: number,
   theme: HeatmapTheme,
   env: Env,
+  rolling = false,
 ): Promise<Response> {
   const account = await env.DB.prepare(
     `SELECT a.github_user_id, a.current_login, h.public_enabled, h.updated_at
@@ -166,6 +187,10 @@ export async function renderHeatmap(
     );
   }
 
+  const lastDate = rolling ? new Date() : dateAtUtc(year, 11, 31);
+  const firstDate = new Date(lastDate);
+  if (rolling) firstDate.setUTCDate(firstDate.getUTCDate() - 364);
+  else firstDate.setUTCMonth(0, 1);
   const rows = await env.DB.prepare(
     `SELECT local_date, accepted_submission_count, distinct_problem_count
        FROM daily_activity
@@ -173,7 +198,7 @@ export async function renderHeatmap(
         AND local_date BETWEEN ? AND ?
       ORDER BY local_date`,
   )
-    .bind(account.github_user_id, `${year}-01-01`, `${year}-12-31`)
+    .bind(account.github_user_id, dateKey(firstDate), dateKey(lastDate))
     .all<ActivityRow>();
 
   return svgResponse(
@@ -183,6 +208,7 @@ export async function renderHeatmap(
       rows: rows.results,
       updatedAt: account.updated_at,
       theme,
+      ...(rolling ? { endDate: dateKey(lastDate) } : {}),
     }),
     300,
   );

@@ -2,16 +2,14 @@ import { LeetCodeApiError } from "@leetcode-daily/leetcode-cn";
 
 import { syncActivityToCloud } from "./activity-sync";
 import { rebuildDailyActivity } from "./activity-ledger";
-import {
-  database,
-  type StoredHistoryActivityBackfill,
-} from "./database";
+import { database, type StoredHistoryActivityBackfill } from "./database";
 import { leetcodeClient } from "./leetcode";
 
 export const HISTORY_ACTIVITY_ALARM = "history-activity-work";
 const JOB_ID = "history-activity";
 const PROBLEMS_PER_WAKE = 5;
 const MAX_ATTEMPTS_PER_PROBLEM = 5;
+const REFRESH_INTERVAL_MS = 60 * 60 * 1_000;
 let activeRun: Promise<void> | null = null;
 let activeEnsure: Promise<void> | null = null;
 
@@ -19,9 +17,7 @@ export function historyActivityRetryDelayMs(attempts: number): number {
   return Math.min(15 * 60_000, 60_000 * 2 ** Math.max(0, attempts - 1));
 }
 
-export async function ensureHistoryActivityBackfill(
-  username: string,
-): Promise<void> {
+export async function ensureHistoryActivityBackfill(username: string): Promise<void> {
   activeEnsure ??= ensureBackfill(username).finally(() => {
     activeEnsure = null;
   });
@@ -31,7 +27,13 @@ export async function ensureHistoryActivityBackfill(
 async function ensureBackfill(username: string): Promise<void> {
   const db = await database();
   const existing = await db.get("historyActivity", JOB_ID);
-  if (existing?.username === username && existing.state === "completed") return;
+  if (
+    existing?.username === username &&
+    existing.state === "completed" &&
+    Date.now() - Date.parse(existing.updatedAt) < REFRESH_INTERVAL_MS
+  ) {
+    return;
+  }
   if (existing?.username === username && existing.state === "running") {
     await scheduleHistoryActivity();
     return;
@@ -82,23 +84,15 @@ export async function runHistoryActivityBackfill(): Promise<void> {
 async function runBackfillChunk(): Promise<void> {
   const db = await database();
   const initial = await db.get("historyActivity", JOB_ID);
-  if (!initial || initial.state !== "running") return;
-
-  const codeImport = await db.get("historyImport", "history-import");
-  if (codeImport?.state === "running") {
-    await scheduleHistoryActivity(60_000);
-    return;
-  }
+  if (initial?.state !== "running") return;
 
   // Preserve a wake-up if Chrome stops this service worker mid-request.
   await scheduleHistoryActivity(60_000);
   for (let count = 0; count < PROBLEMS_PER_WAKE; count += 1) {
     const job = await db.get("historyActivity", JOB_ID);
-    if (!job || job.state !== "running") return;
+    if (job?.state !== "running") return;
     if (job.nextAttemptAt && job.nextAttemptAt > new Date().toISOString()) {
-      await scheduleHistoryActivity(
-        Math.max(1_000, Date.parse(job.nextAttemptAt) - Date.now()),
-      );
+      await scheduleHistoryActivity(Math.max(1_000, Date.parse(job.nextAttemptAt) - Date.now()));
       return;
     }
     if (job.nextIndex >= job.problemSlugs.length) {
@@ -115,16 +109,12 @@ async function runBackfillChunk(): Promise<void> {
   if (current?.state === "running") await scheduleHistoryActivity(2_000);
 }
 
-async function processProblem(
-  job: StoredHistoryActivityBackfill,
-): Promise<boolean> {
+async function processProblem(job: StoredHistoryActivityBackfill): Promise<boolean> {
   const problem = job.problemSlugs[job.nextIndex];
   if (!problem) return true;
   const db = await database();
   try {
-    const summaries = await leetcodeClient.getAcceptedSubmissions(
-      problem.titleSlug,
-    );
+    const summaries = await leetcodeClient.getAcceptedSubmissions(problem.titleSlug);
     const transaction = db.transaction("historicalAccepted", "readwrite");
     for (const summary of summaries) {
       await transaction.store.put({
@@ -151,8 +141,7 @@ async function processProblem(
     }
 
     const attempts = job.attempts + 1;
-    const retryable =
-      !(cause instanceof LeetCodeApiError) || cause.retryable;
+    const retryable = !(cause instanceof LeetCodeApiError) || cause.retryable;
     if (retryable && attempts < MAX_ATTEMPTS_PER_PROBLEM) {
       const delayMs = historyActivityRetryDelayMs(attempts);
       await db.put("historyActivity", {
@@ -187,7 +176,7 @@ async function publishActivity(syncCloud: boolean): Promise<void> {
 async function completeBackfill(): Promise<void> {
   const db = await database();
   const current = await db.get("historyActivity", JOB_ID);
-  if (!current || current.state !== "running") return;
+  if (current?.state !== "running") return;
   await db.put("historyActivity", {
     ...current,
     state: "completed",
@@ -198,10 +187,7 @@ async function completeBackfill(): Promise<void> {
   await chrome.alarms.clear(HISTORY_ACTIVITY_ALARM);
 }
 
-async function failBackfill(
-  job: StoredHistoryActivityBackfill,
-  message: string,
-): Promise<void> {
+async function failBackfill(job: StoredHistoryActivityBackfill, message: string): Promise<void> {
   await (await database()).put("historyActivity", {
     ...job,
     state: "failed",

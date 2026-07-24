@@ -8,11 +8,7 @@ import {
   startGitHubAuth,
 } from "./auth";
 import type { Env } from "./env";
-import {
-  renderHeatmap,
-  renderHeatmapError,
-  type HeatmapTheme,
-} from "./heatmap";
+import { renderHeatmap, renderHeatmapError, type HeatmapTheme } from "./heatmap";
 import { corsHeaders, json, withCors } from "./http";
 import { runScheduledMaintenance } from "./maintenance";
 import { enforceRateLimit, type RateLimitPolicy } from "./rate-limit";
@@ -21,9 +17,7 @@ function validYear(value: string | null): number {
   const current = new Date().getUTCFullYear();
   if (!value) return current;
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 2000 && parsed <= current + 1
-    ? parsed
-    : current;
+  return Number.isInteger(parsed) && parsed >= 2000 && parsed <= current + 1 ? parsed : current;
 }
 
 function validTheme(value: string | null): HeatmapTheme {
@@ -106,15 +100,14 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (limited) return withCors(limited, request, env);
   }
 
-  const heatmapMatch = url.pathname.match(
-    /^\/heatmap\/github\/([a-zA-Z0-9-]{1,39})\.svg$/,
-  );
+  const heatmapMatch = url.pathname.match(/^\/heatmap\/github\/([a-zA-Z0-9-]{1,39})\.svg$/);
   if (request.method === "GET" && heatmapMatch?.[1]) {
     return renderHeatmap(
       heatmapMatch[1],
       validYear(url.searchParams.get("year")),
       validTheme(url.searchParams.get("theme")),
       env,
+      !url.searchParams.has("year"),
     );
   }
 
