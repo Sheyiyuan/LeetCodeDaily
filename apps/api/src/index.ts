@@ -14,7 +14,7 @@ import {
   type HeatmapTheme,
 } from "./heatmap";
 import { corsHeaders, json, withCors } from "./http";
-import { cleanupExpiredRecords } from "./maintenance";
+import { runScheduledMaintenance } from "./maintenance";
 import { enforceRateLimit, type RateLimitPolicy } from "./rate-limit";
 
 function validYear(value: string | null): number {
@@ -177,6 +177,6 @@ export default {
     return response;
   },
   scheduled(_controller, env, context) {
-    context.waitUntil(cleanupExpiredRecords(env));
+    context.waitUntil(runScheduledMaintenance(env));
   },
 } satisfies ExportedHandler<Env>;

@@ -1,6 +1,10 @@
 import type { Env } from "./env";
 import { json } from "./http";
 import { decryptSecret, encryptSecret } from "./security/encryption";
+import {
+  encryptionKeyForVersion,
+  readEncryptionKeyRing,
+} from "./security/key-ring";
 import { authenticate, sha256Hex } from "./security/session";
 
 interface GitHubTokenResponse {
@@ -28,6 +32,7 @@ interface AuthGrant {
   github_user_id: number;
   encrypted_access_token: string;
   nonce: string;
+  key_version: number;
   access_token_expires_at: string;
   expires_at: string;
   used_at: string | null;
@@ -36,17 +41,16 @@ interface AuthGrant {
 function requireConfiguration(env: Env): asserts env is Env & {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
-  TOKEN_ENCRYPTION_KEY: string;
   PUBLIC_BASE_URL: string;
 } {
   if (
     !env.GITHUB_CLIENT_ID ||
     !env.GITHUB_CLIENT_SECRET ||
-    !env.TOKEN_ENCRYPTION_KEY ||
     !env.PUBLIC_BASE_URL
   ) {
     throw new Error("GitHub authentication is not configured");
   }
+  readEncryptionKeyRing(env);
 }
 
 function randomToken(byteLength = 32): string {
@@ -241,13 +245,18 @@ export async function finishGitHubAuth(
 
     const user = await githubUser(token.access_token);
     const now = new Date();
+    const keyRing = readEncryptionKeyRing(env);
+    const activeKey = encryptionKeyForVersion(
+      keyRing,
+      keyRing.activeVersion,
+    );
     const access = await encryptSecret(
       token.access_token,
-      env.TOKEN_ENCRYPTION_KEY,
+      activeKey,
     );
     const refresh = await encryptSecret(
       token.refresh_token,
-      env.TOKEN_ENCRYPTION_KEY,
+      activeKey,
     );
     const existing = await env.DB.prepare(
       "SELECT current_login FROM github_accounts WHERE github_user_id = ?",
@@ -273,7 +282,7 @@ export async function finishGitHubAuth(
         `INSERT INTO github_credentials
           (github_user_id, encrypted_refresh_token, nonce, key_version,
            token_expires_at, updated_at)
-         VALUES (?, ?, ?, 1, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(github_user_id) DO UPDATE SET
            encrypted_refresh_token = excluded.encrypted_refresh_token,
            nonce = excluded.nonce,
@@ -284,6 +293,7 @@ export async function finishGitHubAuth(
         user.id,
         refresh.ciphertext,
         refresh.nonce,
+        keyRing.activeVersion,
         addSeconds(now, token.refresh_token_expires_in),
         now.toISOString(),
       ),
@@ -304,15 +314,16 @@ export async function finishGitHubAuth(
     const grant = randomToken();
     await env.DB.prepare(
       `INSERT INTO auth_grants
-        (grant_hash, github_user_id, encrypted_access_token, nonce,
+        (grant_hash, github_user_id, encrypted_access_token, nonce, key_version,
          access_token_expires_at, expires_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         await sha256Hex(grant),
         user.id,
         access.ciphertext,
         access.nonce,
+        keyRing.activeVersion,
         addSeconds(now, token.expires_in),
         addSeconds(now, 5 * 60),
         now.toISOString(),
@@ -339,7 +350,7 @@ export async function exchangeAuthGrant(
 
   const grantHash = await sha256Hex(body.grant);
   const grant = await env.DB.prepare(
-    `SELECT github_user_id, encrypted_access_token, nonce,
+    `SELECT github_user_id, encrypted_access_token, nonce, key_version,
             access_token_expires_at, expires_at, used_at
        FROM auth_grants
       WHERE grant_hash = ?`,
@@ -360,6 +371,11 @@ export async function exchangeAuthGrant(
     return json({ error: "invalid_or_expired_grant" }, { status: 401 });
   }
 
+  const accessToken = await decryptSecret(
+    grant.encrypted_access_token,
+    grant.nonce,
+    encryptionKeyForVersion(readEncryptionKeyRing(env), grant.key_version),
+  );
   const sessionToken = randomToken();
   const sessionId = crypto.randomUUID();
   await env.DB.prepare(
@@ -384,11 +400,7 @@ export async function exchangeAuthGrant(
   return json({
     sessionToken,
     sessionExpiresAt: addSeconds(now, 30 * 24 * 60 * 60),
-    accessToken: await decryptSecret(
-      grant.encrypted_access_token,
-      grant.nonce,
-      env.TOKEN_ENCRYPTION_KEY,
-    ),
+    accessToken,
     accessTokenExpiresAt: grant.access_token_expires_at,
     github: {
       id: grant.github_user_id,
@@ -406,7 +418,7 @@ export async function refreshGitHubAccess(
   if (!session) return json({ error: "unauthorized" }, { status: 401 });
 
   const credential = await env.DB.prepare(
-    `SELECT encrypted_refresh_token, nonce, token_expires_at
+    `SELECT encrypted_refresh_token, nonce, key_version, token_expires_at
        FROM github_credentials
       WHERE github_user_id = ?`,
   )
@@ -414,6 +426,7 @@ export async function refreshGitHubAccess(
     .first<{
       encrypted_refresh_token: string;
       nonce: string;
+      key_version: number;
       token_expires_at: string | null;
     }>();
   if (
@@ -425,10 +438,11 @@ export async function refreshGitHubAccess(
   }
 
   try {
+    const keyRing = readEncryptionKeyRing(env);
     const oldRefresh = await decryptSecret(
       credential.encrypted_refresh_token,
       credential.nonce,
-      env.TOKEN_ENCRYPTION_KEY,
+      encryptionKeyForVersion(keyRing, credential.key_version),
     );
     const token = await tokenRequest({
       client_id: env.GITHUB_CLIENT_ID,
@@ -447,17 +461,18 @@ export async function refreshGitHubAccess(
     const now = new Date();
     const refresh = await encryptSecret(
       token.refresh_token,
-      env.TOKEN_ENCRYPTION_KEY,
+      encryptionKeyForVersion(keyRing, keyRing.activeVersion),
     );
     await env.DB.prepare(
       `UPDATE github_credentials
-          SET encrypted_refresh_token = ?, nonce = ?,
+          SET encrypted_refresh_token = ?, nonce = ?, key_version = ?,
               token_expires_at = ?, updated_at = ?
         WHERE github_user_id = ?`,
     )
       .bind(
         refresh.ciphertext,
         refresh.nonce,
+        keyRing.activeVersion,
         addSeconds(now, token.refresh_token_expires_in),
         now.toISOString(),
         session.githubUserId,
