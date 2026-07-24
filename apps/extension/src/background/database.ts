@@ -40,6 +40,19 @@ export interface StoredHistoricalAccepted {
   submittedAt: string;
 }
 
+export interface StoredHistoryActivityBackfill {
+  id: "history-activity";
+  username: string;
+  state: "running" | "completed" | "failed";
+  problemSlugs: SolvedProblemSummary[];
+  nextIndex: number;
+  attempts: number;
+  failures: Array<{ titleSlug: string; message: string }>;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  updatedAt: string;
+}
+
 interface LeetCodeDailyDb extends DBSchema {
   candidates: {
     key: string;
@@ -73,12 +86,16 @@ interface LeetCodeDailyDb extends DBSchema {
     key: string;
     value: StoredHistoricalAccepted;
   };
+  historyActivity: {
+    key: string;
+    value: StoredHistoryActivityBackfill;
+  };
 }
 
 let databasePromise: Promise<IDBPDatabase<LeetCodeDailyDb>> | null = null;
 
 export function database(): Promise<IDBPDatabase<LeetCodeDailyDb>> {
-  databasePromise ??= openDB<LeetCodeDailyDb>("leetcode-daily", 2, {
+  databasePromise ??= openDB<LeetCodeDailyDb>("leetcode-daily", 3, {
     upgrade(db, oldVersion) {
       if (oldVersion >= 1) {
         if (!db.objectStoreNames.contains("historyImport")) {
@@ -88,6 +105,9 @@ export function database(): Promise<IDBPDatabase<LeetCodeDailyDb>> {
           db.createObjectStore("historicalAccepted", {
             keyPath: "submissionId",
           });
+        }
+        if (!db.objectStoreNames.contains("historyActivity")) {
+          db.createObjectStore("historyActivity", { keyPath: "id" });
         }
         return;
       }
@@ -110,6 +130,7 @@ export function database(): Promise<IDBPDatabase<LeetCodeDailyDb>> {
       db.createObjectStore("historicalAccepted", {
         keyPath: "submissionId",
       });
+      db.createObjectStore("historyActivity", { keyPath: "id" });
     },
   });
   return databasePromise;
@@ -154,6 +175,7 @@ export async function clearDatabase(): Promise<void> {
       "syncJobs",
       "historyImport",
       "historicalAccepted",
+      "historyActivity",
     ],
     "readwrite",
   );
@@ -164,6 +186,7 @@ export async function clearDatabase(): Promise<void> {
     transaction.objectStore("syncJobs").clear(),
     transaction.objectStore("historyImport").clear(),
     transaction.objectStore("historicalAccepted").clear(),
+    transaction.objectStore("historyActivity").clear(),
   ]);
   await transaction.done;
 }

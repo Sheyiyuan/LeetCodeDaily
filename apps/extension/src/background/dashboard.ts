@@ -43,12 +43,14 @@ export async function readDashboard(): Promise<DashboardState> {
       acceptedSubmissionCount: day.acceptedSubmissionCount,
       distinctProblemCount: day.distinctProblemIds.length,
     }));
+  const historyActivity = await db.get("historyActivity", "history-activity");
   return {
     account,
     stats,
     activityDays,
     todayLocalDate: localDateForInstant(new Date(), settings.timezone),
-    pendingCount: counts.pending,
+    pendingCount:
+      counts.pending + (historyActivity?.state === "running" ? 1 : 0),
     failedCount: counts.failed,
     lastSuccessfulRefreshAt,
     error,

@@ -16,6 +16,7 @@ import {
   readGitHubAuth,
 } from "./auth";
 import { syncActivityToCloud } from "./activity-sync";
+import { rebuildDailyActivity } from "./activity-ledger";
 import { readDashboard, refreshDashboard } from "./dashboard";
 import {
   readAuthorizedRepositories,
@@ -34,8 +35,23 @@ import {
   runHistoryImport,
   startHistoryImport,
 } from "./history-import";
+import {
+  ensureHistoryActivityBackfill,
+  HISTORY_ACTIVITY_ALARM,
+  runHistoryActivityBackfill,
+} from "./history-activity";
 
 const RETRY_ALARM = "retry-failed-work";
+
+async function refreshDashboardAndBackfill(): Promise<DashboardState> {
+  const dashboard = await refreshDashboard();
+  if (dashboard.account?.isSignedIn && dashboard.account.username) {
+    await ensureHistoryActivityBackfill(dashboard.account.username).catch(
+      () => undefined,
+    );
+  }
+  return readDashboard();
+}
 
 async function retryWork(force: boolean): Promise<void> {
   await retryCandidates(force);
@@ -57,7 +73,7 @@ async function retryWork(force: boolean): Promise<void> {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void refreshDashboard();
+  void refreshDashboardAndBackfill();
   void chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 });
 });
 
@@ -66,11 +82,15 @@ chrome.runtime.onStartup.addListener(() => {
   void readHistoryImport().then((status) => {
     if (status.state === "running") void runHistoryImport();
   });
+  void runHistoryActivityBackfill();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === RETRY_ALARM) void retryWork(false);
   if (alarm.name === HISTORY_IMPORT_ALARM) void runHistoryImport();
+  if (alarm.name === HISTORY_ACTIVITY_ALARM) {
+    void runHistoryActivityBackfill();
+  }
 });
 
 chrome.runtime.onMessage.addListener(
@@ -97,7 +117,10 @@ chrome.runtime.onMessage.addListener(
             sendResponse({ ok: true });
             break;
           case "dashboard-refresh":
-            sendResponse({ ok: true, data: await refreshDashboard() });
+            sendResponse({
+              ok: true,
+              data: await refreshDashboardAndBackfill(),
+            });
             break;
           case "dashboard-read":
             sendResponse({ ok: true, data: await readDashboard() });
@@ -154,6 +177,7 @@ chrome.runtime.onMessage.addListener(
             break;
           case "settings-write":
             await writeSettings(message.payload);
+            await rebuildDailyActivity();
             await syncActivityToCloud();
             sendResponse({ ok: true });
             break;
