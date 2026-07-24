@@ -21,7 +21,7 @@ const LIGHT_COLORS = {
   primary: "#24292f",
   secondary: "#57606a",
   muted: "#6e7781",
-  levels: ["#ebedf0", "#9be9a8", "#40c463", "#30a14e", "#216e39"],
+  levels: ["#ebedf0", "#c6e48b", "#7bc96f", "#239a3b", "#196127"],
 };
 const DARK_COLORS = {
   background: "#0d1117",
@@ -30,20 +30,7 @@ const DARK_COLORS = {
   muted: "#6e7681",
   levels: ["#21262d", "#0e4429", "#006d32", "#26a641", "#39d353"],
 };
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function escapeXml(value: string): string {
   return value
@@ -89,11 +76,7 @@ function themeStyle(theme: HeatmapTheme): string {
   return `<style>:root{${cssVariables(initial)}}${media}</style>`;
 }
 
-function statusSvg(
-  title: string,
-  message: string,
-  theme: HeatmapTheme,
-): string {
+function statusSvg(title: string, message: string, theme: HeatmapTheme): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="820" height="120" role="img" aria-label="${escapeXml(message)}">
   <title>${escapeXml(message)}</title>
   ${themeStyle(theme)}
@@ -104,13 +87,8 @@ function statusSvg(
 }
 
 export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
-  const counts = new Map(
-    input.rows.map((row) => [row.local_date, row.distinct_problem_count]),
-  );
-  const acceptedTotal = input.rows.reduce(
-    (sum, row) => sum + row.accepted_submission_count,
-    0,
-  );
+  const counts = new Map(input.rows.map((row) => [row.local_date, row.distinct_problem_count]));
+  const acceptedTotal = input.rows.reduce((sum, row) => sum + row.accepted_submission_count, 0);
   const firstDay = dateAtUtc(input.year, 0, 1);
   const lastDay = dateAtUtc(input.year, 11, 31);
   const gridStart = new Date(firstDay);
@@ -118,20 +96,14 @@ export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
   const gridEnd = new Date(lastDay);
   gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
 
-  const cell = 11;
-  const gap = 3;
-  const left = 44;
-  const top = 58;
+  const cell = 20;
+  const gap = 4;
+  const left = 64;
+  const top = 30;
   const cells: string[] = [];
 
-  for (
-    let date = new Date(gridStart);
-    date <= gridEnd;
-    date.setUTCDate(date.getUTCDate() + 1)
-  ) {
-    const week = Math.floor(
-      (date.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1_000),
-    );
+  for (let date = new Date(gridStart); date <= gridEnd; date.setUTCDate(date.getUTCDate() + 1)) {
+    const week = Math.floor((date.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1_000));
     const day = date.getUTCDay();
     const inYear = date.getUTCFullYear() === input.year;
     const count = inYear ? (counts.get(dateKey(date)) ?? 0) : 0;
@@ -142,32 +114,24 @@ export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
 
   const monthLabels = MONTHS.map((month, index) => {
     const first = dateAtUtc(input.year, index, 1);
-    const week = Math.floor(
-      (first.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1_000),
-    );
-    return `<text x="${left + week * (cell + gap)}" y="48" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="10">${month}</text>`;
+    const week = Math.floor((first.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1_000));
+    return `<text x="${left + week * (cell + gap)}" y="18" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">${month}</text>`;
   }).join("");
+  const summary = acceptedTotal > 0 ? `${acceptedTotal} accepted` : "No activity yet";
   const updated = input.updatedAt
     ? new Date(input.updatedAt).toISOString().slice(0, 10)
     : "not synced";
-  const summary =
-    acceptedTotal > 0 ? `${acceptedTotal} accepted` : "No activity yet";
-  const ariaLabel = `${input.login} LeetCode activity for ${input.year}: ${summary}`;
+  const ariaLabel = `${input.login} LeetCode activity for ${input.year}: ${summary}; Updated ${updated}`;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="820" height="188" role="img" aria-label="${escapeXml(ariaLabel)}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="196" viewBox="0 0 1360 196" role="img" aria-label="${escapeXml(ariaLabel)}">
   <title>${escapeXml(ariaLabel)}</title>
   ${themeStyle(input.theme)}
-  <rect width="820" height="188" rx="8" fill="var(--background)"/>
-  <text x="24" y="28" fill="var(--primary)" font-family="system-ui,sans-serif" font-size="16" font-weight="600">${escapeXml(input.login)} · LeetCode Activity</text>
-  <text x="796" y="28" text-anchor="end" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="12">${input.year} · ${summary}</text>
+  <rect width="1360" height="196" fill="var(--background)"/>
   ${monthLabels}
-  <text x="24" y="84" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="10">Mon</text>
-  <text x="24" y="112" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="10">Wed</text>
-  <text x="24" y="140" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="10">Fri</text>
+  <text x="16" y="${top + 1 * (cell + gap) + 14}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">Mon</text>
+  <text x="16" y="${top + 3 * (cell + gap) + 14}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">Wed</text>
+  <text x="16" y="${top + 5 * (cell + gap) + 14}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">Fri</text>
   ${cells.join("")}
-  <text x="24" y="174" fill="var(--muted)" font-family="system-ui,sans-serif" font-size="10">Updated ${updated}</text>
-  <text x="700" y="174" fill="var(--muted)" font-family="system-ui,sans-serif" font-size="10">Less</text>
-  ${Array.from({ length: 5 }, (_, index) => `<rect x="${730 + index * 14}" y="165" width="10" height="10" rx="2" fill="var(--level-${index})"/>`).join("")}
 </svg>`;
 }
 
@@ -197,11 +161,7 @@ export async function renderHeatmap(
   if (!account) return new Response("Not found", { status: 404 });
   if (account.public_enabled !== 1) {
     return svgResponse(
-      statusSvg(
-        `${account.current_login} · LeetCode Activity`,
-        "Heatmap is not public.",
-        theme,
-      ),
+      statusSvg(`${account.current_login} · LeetCode Activity`, "Heatmap is not public.", theme),
       300,
     );
   }
@@ -230,25 +190,17 @@ export async function renderHeatmap(
 
 export function renderHeatmapError(theme: HeatmapTheme): Response {
   return svgResponse(
-    statusSvg(
-      "LeetCode Activity",
-      "Heatmap is temporarily unavailable.",
-      theme,
-    ),
+    statusSvg("LeetCode Activity", "Heatmap is temporarily unavailable.", theme),
     30,
   );
 }
 
-function svgResponse(
-  svg: string,
-  maxAgeSeconds: number,
-): Response {
+function svgResponse(svg: string, maxAgeSeconds: number): Response {
   return new Response(svg, {
     headers: {
       "Content-Type": "image/svg+xml; charset=utf-8",
       "Cache-Control": `public, max-age=${maxAgeSeconds}`,
-      "Content-Security-Policy":
-        "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
       "X-Content-Type-Options": "nosniff",
     },
   });
