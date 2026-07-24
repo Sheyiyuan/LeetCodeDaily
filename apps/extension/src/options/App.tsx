@@ -66,6 +66,34 @@ export function App() {
     }
   }
 
+  async function deleteAccount() {
+    if (
+      !window.confirm(
+        "这会删除服务端账户、热力图数据和扩展本地记录，且无法撤销。确定继续吗？",
+      )
+    ) {
+      return;
+    }
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      const response = (await chrome.runtime.sendMessage({
+        type: "github-delete-account",
+      })) as MessageResponse<undefined>;
+      if (!response.ok) throw new Error(response.error ?? "删除账户失败");
+      setGithub({
+        connected: false,
+        login: null,
+        sessionExpiresAt: null,
+        heatmapUrl: null,
+      });
+    } catch (cause) {
+      setAuthError(cause instanceof Error ? cause.message : "删除账户失败");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
   async function save() {
     const response = (await chrome.runtime.sendMessage({
       type: "settings-write",
@@ -111,6 +139,16 @@ export function App() {
           <div className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
             {authError}
           </div>
+        ) : null}
+        {github.connected ? (
+          <button
+            className="w-fit rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-500/15"
+            disabled={authBusy}
+            onClick={() => void deleteAccount()}
+            type="button"
+          >
+            删除账户数据
+          </button>
         ) : null}
         <label className="block">
           <span className="text-sm text-white/70">统计时区</span>

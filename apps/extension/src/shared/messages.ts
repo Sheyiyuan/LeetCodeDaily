@@ -17,6 +17,7 @@ export type ExtensionMessage =
   | { type: "github-auth-read" }
   | { type: "github-connect" }
   | { type: "github-disconnect" }
+  | { type: "github-delete-account" }
   | { type: "retry-all" }
   | { type: "settings-read" }
   | { type: "settings-write"; payload: ExtensionSettings };

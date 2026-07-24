@@ -81,3 +81,18 @@ export async function countCandidateStates(): Promise<{
     failed: failed + syncFailed,
   };
 }
+
+export async function clearDatabase(): Promise<void> {
+  const db = await database();
+  const transaction = db.transaction(
+    ["candidates", "submissions", "dailyActivity", "syncJobs"],
+    "readwrite",
+  );
+  await Promise.all([
+    transaction.objectStore("candidates").clear(),
+    transaction.objectStore("submissions").clear(),
+    transaction.objectStore("dailyActivity").clear(),
+    transaction.objectStore("syncJobs").clear(),
+  ]);
+  await transaction.done;
+}

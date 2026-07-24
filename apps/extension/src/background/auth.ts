@@ -157,3 +157,22 @@ export async function disconnectGitHub(): Promise<void> {
     chrome.storage.session.remove(Object.values(SESSION_KEYS)),
   ]);
 }
+
+export async function deleteGitHubAccount(): Promise<void> {
+  const token = await sessionToken();
+  if (!token) throw new Error("尚未连接 GitHub");
+  const response = await fetch(`${API_BASE_URL}/v1/account`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(body?.error ?? `删除账户失败（${response.status}）`);
+  }
+  await Promise.all([
+    chrome.storage.local.remove(Object.values(LOCAL_KEYS)),
+    chrome.storage.session.remove(Object.values(SESSION_KEYS)),
+  ]);
+}

@@ -1,4 +1,5 @@
 import { putActivity, putHeatmapSettings } from "./activity";
+import { deleteAccount } from "./account";
 import {
   exchangeAuthGrant,
   finishGitHubAuth,
@@ -60,6 +61,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (request.method === "DELETE" && url.pathname === "/v1/auth/session") {
     return withCors(await revokeSession(request, env), request, env);
+  }
+  if (request.method === "DELETE" && url.pathname === "/v1/account") {
+    return withCors(await deleteAccount(request, env), request, env);
   }
 
   return json({ error: "not_found" }, { status: 404 });

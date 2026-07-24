@@ -7,12 +7,17 @@ import type {
 } from "../shared/messages";
 import { localDateForInstant } from "@leetcode-daily/domain";
 import { observeAccepted, retryCandidates } from "./candidates";
-import { connectGitHub, disconnectGitHub, readGitHubAuth } from "./auth";
+import {
+  connectGitHub,
+  deleteGitHubAccount,
+  disconnectGitHub,
+  readGitHubAuth,
+} from "./auth";
 import { syncActivityToCloud } from "./activity-sync";
 import { readDashboard, refreshDashboard } from "./dashboard";
 import { readSettings, writeSettings } from "./settings";
 import { retrySyncJobs } from "./sync";
-import { countCandidateStates, database } from "./database";
+import { clearDatabase, countCandidateStates, database } from "./database";
 import { clearBadge, setCompletedBadge, setFailureBadge } from "./badge";
 
 const RETRY_ALARM = "retry-failed-work";
@@ -85,6 +90,11 @@ chrome.runtime.onMessage.addListener(
             break;
           case "github-disconnect":
             await disconnectGitHub();
+            sendResponse({ ok: true });
+            break;
+          case "github-delete-account":
+            await deleteGitHubAccount();
+            await clearDatabase();
             sendResponse({ ok: true });
             break;
           case "retry-all":

@@ -93,5 +93,5 @@ GitHub Profile README 示例：
 
 - 用真实登录账号验证并固化 `leetcode.cn` 的账号题量、提交详情和历史分页响应 fixture
 - 接入真实 GitHub App / D1 / Worker 域名做端到端授权与提交测试
-- 完成历史代码导入、可靠重试与账号数据删除
+- 完成历史代码导入与可靠重试
 - 完成隐私政策、权限说明、正文版权复核和 Chrome Web Store 素材
