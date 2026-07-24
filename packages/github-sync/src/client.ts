@@ -17,6 +17,7 @@ export interface AtomicCommitInput extends RepositoryTarget {
 export interface AtomicCommitResult {
   commitSha: string;
   treeSha: string;
+  changed: boolean;
 }
 
 export class GitHubSyncError extends Error {
@@ -84,6 +85,16 @@ export class GitHubAtomicCommitClient {
       { method: "GET" },
     );
 
+    if (
+      await this.filesAlreadyMatch(repositoryPath, parent.tree.sha, input.files)
+    ) {
+      return {
+        commitSha: parentSha,
+        treeSha: parent.tree.sha,
+        changed: false,
+      };
+    }
+
     const blobs = await Promise.all(
       input.files.map(async (file) => {
         const blob = await this.request<{ sha: string }>(
@@ -133,7 +144,44 @@ export class GitHubAtomicCommitClient {
       },
     );
 
-    return { commitSha: commit.sha, treeSha: tree.sha };
+    return { commitSha: commit.sha, treeSha: tree.sha, changed: true };
+  }
+
+  private async filesAlreadyMatch(
+    repositoryPath: string,
+    treeSha: string,
+    files: CommitFile[],
+  ): Promise<boolean> {
+    const tree = await this.request<{
+      truncated?: boolean;
+      tree: Array<{ path?: string; type?: string; sha?: string }>;
+    }>(`${repositoryPath}/git/trees/${treeSha}?recursive=1`, { method: "GET" });
+    if (tree.truncated) return false;
+
+    const entries = new Map(
+      tree.tree
+        .filter(
+          (entry): entry is { path: string; type: "blob"; sha: string } =>
+            entry.type === "blob" &&
+            typeof entry.path === "string" &&
+            typeof entry.sha === "string",
+        )
+        .map((entry) => [entry.path, entry.sha]),
+    );
+
+    for (const file of files) {
+      const sha = entries.get(file.path);
+      if (!sha) return false;
+      const blob = await this.request<{ content?: string; encoding?: string }>(
+        `${repositoryPath}/git/blobs/${sha}`,
+        { method: "GET" },
+      );
+      if (blob.encoding !== "base64" || typeof blob.content !== "string") {
+        return false;
+      }
+      if (decodeBase64(blob.content) !== file.content) return false;
+    }
+    return true;
   }
 
   private async request<T = unknown>(
@@ -168,6 +216,12 @@ export class GitHubAtomicCommitClient {
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }
+}
+
+function decodeBase64(value: string): string {
+  const binary = atob(value.replaceAll(/\s/g, ""));
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 function validateInput(input: AtomicCommitInput): void {
