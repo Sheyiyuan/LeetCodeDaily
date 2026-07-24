@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "LeetCodeDaily",
+  "version": "0.1.0",
+  "description": "记录 leetcode.cn 刷题活动并同步到 GitHub。",
+  "permissions": ["storage", "alarms", "identity"],
+  "host_permissions": [
+    "https://leetcode.cn/*",
+    "https://api.github.com/*",
+    "https://leetcode-daily-api.deshengl331.workers.dev/*",
+    "http://127.0.0.1:8787/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LeetCodeDaily"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.cn/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html"
+}

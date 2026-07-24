@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "leetcode-daily-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "leetcode-daily",
+      "database_id": "ec4e240d-fed2-42a5-9447-fd10c5828b96",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "ALLOWED_EXTENSION_ORIGIN": "chrome-extension://replace-after-store-id",
+    "PUBLIC_BASE_URL": "https://leetcode-daily-api.deshengl331.workers.dev"
+  }
+}
