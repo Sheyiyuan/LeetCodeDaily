@@ -146,8 +146,9 @@ export function App() {
   }, [load]);
 
   const signedIn = state.account?.isSignedIn === true;
-  const displayName = signedIn ? state.account?.username : "LeetCodeDaily";
-  const username = state.account?.username?.trim() || github.login;
+  const displayName = signedIn
+    ? state.account?.displayName?.trim() || state.account?.username
+    : "LeetCodeDaily";
   const updatedAt = state.lastSuccessfulRefreshAt
     ? new Date(state.lastSuccessfulRefreshAt).toLocaleTimeString([], {
         hour: "2-digit",
@@ -271,7 +272,7 @@ export function App() {
               {github.connected ? <Check size={13} /> : <Code2 size={13} />}
             </span>
             <span>GitHub</span>
-            <strong>{github.connected ? username : "未连接"}</strong>
+            <strong>{github.connected ? github.login : "未连接"}</strong>
           </div>
           {state.failedCount > 0 ? (
             <div>

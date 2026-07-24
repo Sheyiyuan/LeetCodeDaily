@@ -21,6 +21,7 @@ const dashboard: DashboardState = {
     site: "leetcode.cn",
     isSignedIn: true,
     username: "yuhhhy",
+    displayName: "YPSH",
     avatarUrl: null,
     observedAt: "2026-07-30T08:16:00.000Z",
   },
