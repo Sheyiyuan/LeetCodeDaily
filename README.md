@@ -83,11 +83,17 @@ GitHub App 需要：
 https://<api-domain>/heatmap/github/<github-login>.svg
 ```
 
-GitHub Profile README 示例：
+GitHub Profile README 示例（根据 GitHub 深浅主题自动选择）：
 
-```markdown
-![LeetCode Activity](https://<api-domain>/heatmap/github/<github-login>.svg)
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://<api-domain>/heatmap/github/<github-login>.svg?theme=dark">
+  <source media="(prefers-color-scheme: light)" srcset="https://<api-domain>/heatmap/github/<github-login>.svg?theme=light">
+  <img alt="LeetCode Activity" src="https://<api-domain>/heatmap/github/<github-login>.svg">
+</picture>
 ```
+
+可用查询参数：`theme=auto|light|dark`；`year=2026` 可固定展示年份。省略年份时自动展示当前年份。
 
 ## 发布前仍需完成
 

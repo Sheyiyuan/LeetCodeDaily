@@ -681,7 +681,7 @@ input:disabled {
 
 .url-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px 30px;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
   align-items: center;
   gap: 4px;
   border: 1px solid var(--border);

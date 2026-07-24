@@ -8,7 +8,11 @@ import {
   startGitHubAuth,
 } from "./auth";
 import type { Env } from "./env";
-import { renderHeatmap } from "./heatmap";
+import {
+  renderHeatmap,
+  renderHeatmapError,
+  type HeatmapTheme,
+} from "./heatmap";
 import { corsHeaders, json, withCors } from "./http";
 
 function validYear(value: string | null): number {
@@ -18,6 +22,10 @@ function validYear(value: string | null): number {
   return Number.isInteger(parsed) && parsed >= 2000 && parsed <= current + 1
     ? parsed
     : current;
+}
+
+function validTheme(value: string | null): HeatmapTheme {
+  return value === "light" || value === "dark" ? value : "auto";
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -37,6 +45,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return renderHeatmap(
       heatmapMatch[1],
       validYear(url.searchParams.get("year")),
+      validTheme(url.searchParams.get("theme")),
       env,
     );
   }
@@ -74,6 +83,13 @@ export default {
     try {
       return await route(request, env);
     } catch {
+      const url = new URL(request.url);
+      if (
+        request.method === "GET" &&
+        /^\/heatmap\/github\/[a-zA-Z0-9-]{1,39}\.svg$/.test(url.pathname)
+      ) {
+        return renderHeatmapError(validTheme(url.searchParams.get("theme")));
+      }
       return json({ error: "internal_error" }, { status: 500 });
     }
   },

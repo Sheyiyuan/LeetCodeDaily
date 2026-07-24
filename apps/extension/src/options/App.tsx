@@ -4,6 +4,7 @@ import {
   Cloud,
   Code2,
   ExternalLink,
+  FileCode2,
   FolderGit2,
   GitBranch,
   Globe2,
@@ -76,6 +77,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [repositoryBusy, setRepositoryBusy] = useState(false);
   const [repositories, setRepositories] = useState<GitHubRepositorySummary[]>([]);
@@ -250,6 +252,17 @@ export function App() {
     window.setTimeout(() => setCopied(false), 1_500);
   }
 
+  async function copyHeatmapEmbed(): Promise<void> {
+    if (!github.heatmapUrl) return;
+    const separator = github.heatmapUrl.includes("?") ? "&" : "?";
+    const darkUrl = `${github.heatmapUrl}${separator}theme=dark`;
+    const lightUrl = `${github.heatmapUrl}${separator}theme=light`;
+    const snippet = `<picture>\n  <source media="(prefers-color-scheme: dark)" srcset="${darkUrl}">\n  <source media="(prefers-color-scheme: light)" srcset="${lightUrl}">\n  <img alt="LeetCode Activity" src="${github.heatmapUrl}">\n</picture>`;
+    await navigator.clipboard.writeText(snippet);
+    setEmbedCopied(true);
+    window.setTimeout(() => setEmbedCopied(false), 1_500);
+  }
+
   async function historyAction(
     action: "start" | "pause" | "resume" | "cancel",
   ): Promise<void> {
@@ -415,8 +428,11 @@ export function App() {
           {github.heatmapUrl ? (
             <div className="url-row">
               <code>{github.heatmapUrl}</code>
-              <button aria-label="复制热力图地址" className="icon-button" onClick={() => void copyHeatmapUrl()} title="复制地址" type="button">
+              <button aria-label="复制热力图地址" className="icon-button" onClick={() => void copyHeatmapUrl()} title="复制 SVG 地址" type="button">
                 {copied ? <Check size={15} /> : <Clipboard size={15} />}
+              </button>
+              <button aria-label="复制 README 嵌入代码" className="icon-button" onClick={() => void copyHeatmapEmbed()} title="复制 README 嵌入代码" type="button">
+                {embedCopied ? <Check size={15} /> : <FileCode2 size={15} />}
               </button>
               <a aria-label="打开热力图" className="icon-button" href={github.heatmapUrl} rel="noreferrer" target="_blank" title="打开热力图"><ExternalLink size={15} /></a>
             </div>
