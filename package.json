@@ -5,6 +5,7 @@
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "extension:package": "./scripts/package-extension.sh",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "test:run": "pnpm -r --if-present test:run"
