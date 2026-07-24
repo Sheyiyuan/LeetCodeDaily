@@ -57,6 +57,15 @@ cd apps/extension
 pnpm dev
 ```
 
+开发预览页（使用 mock 数据，不会写入真实账号或 GitHub）:
+
+```text
+http://127.0.0.1:5173/preview.html?view=popup
+http://127.0.0.1:5173/preview.html?view=options
+```
+
+预览页只用于视觉、窄屏和键盘回归，生产构建不会包含 mock 数据。
+
 生产构建位于 `apps/extension/dist`，可通过 Chrome 的“加载已解压的扩展程序”载入。
 
 ## GitHub App 配置
