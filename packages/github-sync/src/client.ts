@@ -77,10 +77,17 @@ export class GitHubAtomicCommitClient {
     input: AtomicCommitInput,
   ): Promise<AtomicCommitResult> {
     const repositoryPath = `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repository)}`;
-    const ref = await this.request<{ object: { sha: string } }>(
-      `${repositoryPath}/git/ref/heads/${encodeURIComponent(input.branch)}`,
-      { method: "GET" },
-    );
+    const refPath = `${repositoryPath}/git/ref/heads/${encodeURIComponent(input.branch)}`;
+    let bootstrapped = false;
+    let ref: { object: { sha: string } };
+    try {
+      ref = await this.request(refPath, { method: "GET" });
+    } catch (cause) {
+      if (!isEmptyRepositoryError(cause)) throw cause;
+      await this.bootstrapEmptyRepository(repositoryPath, input);
+      bootstrapped = true;
+      ref = await this.request(refPath, { method: "GET" });
+    }
     const parentSha = ref.object.sha;
     const parent = await this.request<{ tree: { sha: string } }>(
       `${repositoryPath}/git/commits/${parentSha}`,
@@ -93,7 +100,7 @@ export class GitHubAtomicCommitClient {
       return {
         commitSha: parentSha,
         treeSha: parent.tree.sha,
-        changed: false,
+        changed: bootstrapped,
       };
     }
 
@@ -147,6 +154,25 @@ export class GitHubAtomicCommitClient {
     );
 
     return { commitSha: commit.sha, treeSha: tree.sha, changed: true };
+  }
+
+  private async bootstrapEmptyRepository(
+    repositoryPath: string,
+    input: AtomicCommitInput,
+  ): Promise<void> {
+    const firstFile = input.files[0];
+    if (!firstFile) throw new TypeError("at least one file is required");
+    const contentPath = firstFile.path
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    await this.request(`${repositoryPath}/contents/${contentPath}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        message: "chore: initialize repository for LeetCodeDaily",
+        content: encodeBase64(firstFile.content),
+      }),
+    });
   }
 
   private async filesAlreadyMatch(
@@ -224,6 +250,21 @@ function decodeBase64(value: string): string {
   const binary = atob(value.replaceAll(/\s/g, ""));
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+function encodeBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function isEmptyRepositoryError(cause: unknown): boolean {
+  return (
+    cause instanceof GitHubSyncError &&
+    cause.status === 409 &&
+    cause.message.toLowerCase().includes("repository is empty")
+  );
 }
 
 function validateInput(input: AtomicCommitInput): void {

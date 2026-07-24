@@ -9,6 +9,13 @@ function response(body: unknown, status = 200): Response {
   });
 }
 
+function decodeUtf8Base64(value: string): string {
+  const bytes = Uint8Array.from(atob(value), (character) =>
+    character.charCodeAt(0),
+  );
+  return new TextDecoder().decode(bytes);
+}
+
 describe("GitHubAtomicCommitClient", () => {
   it("creates blobs, one tree, one commit, then advances the ref", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -132,6 +139,63 @@ describe("GitHubAtomicCommitClient", () => {
     expect(calls).toHaveLength(16);
     expect(calls[7]?.init.method).toBe("PATCH");
     expect(calls[15]?.init.method).toBe("PATCH");
+  });
+
+  it("initializes an empty repository before creating the atomic solution commit", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const queue = [
+      response({ message: "Git Repository is empty." }, 409),
+      response({ commit: { sha: "bootstrap-commit" } }, 201),
+      response({ object: { sha: "bootstrap-commit" } }),
+      response({ tree: { sha: "bootstrap-tree" } }),
+      response({ tree: [] }),
+      response({ sha: "readme-blob" }),
+      response({ sha: "solution-blob" }),
+      response({ sha: "solution-tree" }),
+      response({ sha: "solution-commit" }),
+      response({ ref: "refs/heads/main" }),
+    ];
+    const client = new GitHubAtomicCommitClient({
+      token: "short-lived-token",
+      fetch: async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} });
+        const next = queue.shift();
+        if (!next) throw new Error("Unexpected request");
+        return next;
+      },
+    });
+
+    await expect(
+      client.commitFiles({
+        owner: "octocat",
+        repository: "empty-repository",
+        branch: "main",
+        message: "solve: 1 two-sum (cpp)",
+        files: [
+          { path: "solutions/1-two-sum/README.md", content: "# 两数之和" },
+          {
+            path: "solutions/1-two-sum/solution.cpp",
+            content: "return {};",
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      commitSha: "solution-commit",
+      treeSha: "solution-tree",
+      changed: true,
+    });
+
+    expect(calls).toHaveLength(10);
+    expect(calls[1]?.url).toContain(
+      "/contents/solutions/1-two-sum/README.md",
+    );
+    expect(calls[1]?.init.method).toBe("PUT");
+    const bootstrapBody = JSON.parse(String(calls[1]?.init.body));
+    expect(bootstrapBody.message).toBe(
+      "chore: initialize repository for LeetCodeDaily",
+    );
+    expect(decodeUtf8Base64(bootstrapBody.content)).toBe("# 两数之和");
+    expect(calls[9]?.init.method).toBe("PATCH");
   });
 
   it("skips the commit when all target files already match", async () => {
