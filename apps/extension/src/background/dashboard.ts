@@ -5,6 +5,7 @@ import {
 } from "@leetcode-daily/domain";
 import type { DashboardState } from "../shared/messages";
 import { countCandidateStates, database } from "./database";
+import { displayStoredSyncFailure } from "./github-errors";
 import { leetcodeClient } from "./leetcode";
 import { readSettings } from "./settings";
 
@@ -43,7 +44,10 @@ export function latestFailureMessage(
       (job.state === "retryable-failure" ||
         job.state === "permanent-failure")
     ) {
-      failures.push({ message, updatedAt: job.updatedAt });
+      failures.push({
+        message: displayStoredSyncFailure(message),
+        updatedAt: job.updatedAt,
+      });
     }
   }
   return failures.sort((left, right) =>

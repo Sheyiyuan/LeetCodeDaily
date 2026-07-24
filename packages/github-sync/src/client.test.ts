@@ -301,4 +301,35 @@ describe("GitHubAtomicCommitClient", () => {
 
     expect(receiver).toBe(globalThis);
   });
+
+  it("preserves GitHub's required repository permissions on API errors", async () => {
+    const client = new GitHubAtomicCommitClient({
+      token: "token",
+      fetch: async () =>
+        new Response(
+          JSON.stringify({ message: "Resource not accessible by integration" }),
+          {
+            status: 403,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Accepted-GitHub-Permissions": "contents=write",
+            },
+          },
+        ),
+    });
+
+    await expect(
+      client.commitFiles({
+        owner: "octocat",
+        repository: "leetcode",
+        branch: "main",
+        message: "solve: two sum",
+        files: [{ path: "README.md", content: "# Two Sum" }],
+      }),
+    ).rejects.toMatchObject({
+      status: 403,
+      retryable: false,
+      acceptedPermissions: "contents=write",
+    });
+  });
 });

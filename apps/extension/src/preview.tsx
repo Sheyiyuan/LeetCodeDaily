@@ -3,6 +3,7 @@ import "./styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { GITHUB_REPOSITORY_PERMISSION_MESSAGE } from "./background/github-errors";
 import type {
   DashboardState,
   ExtensionSettings,
@@ -39,9 +40,7 @@ const dashboard: DashboardState = {
   pendingCount: showQueueFailure ? 0 : 1,
   failedCount: showQueueFailure ? 3 : 0,
   lastSuccessfulRefreshAt: "2026-07-30T08:16:00.000Z",
-  error: showQueueFailure
-    ? "Git Repository is empty. 正在等待初始化仓库后重试"
-    : null,
+  error: showQueueFailure ? GITHUB_REPOSITORY_PERMISSION_MESSAGE : null,
 };
 
 const github: GitHubAuthState = {

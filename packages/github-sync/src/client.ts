@@ -25,6 +25,7 @@ export class GitHubSyncError extends Error {
     message: string,
     public readonly status: number,
     public readonly retryable: boolean,
+    public readonly acceptedPermissions: string | null = null,
   ) {
     super(message);
     this.name = "GitHubSyncError";
@@ -238,6 +239,7 @@ export class GitHubAtomicCommitClient {
           response.status === 422 ||
           response.status === 429 ||
           response.status >= 500,
+        response.headers.get("X-Accepted-GitHub-Permissions"),
       );
     }
 

@@ -60,4 +60,19 @@ describe("dashboard failure reporting", () => {
       ),
     ).toBe("3 项任务失败，旧记录没有错误详情，请点击重试");
   });
+
+  it("turns legacy GitHub App permission errors into actionable guidance", () => {
+    expect(
+      latestFailureMessage(
+        [],
+        [
+          {
+            state: "permanent-failure",
+            lastErrorMessage: "Resource not accessible by integration",
+            updatedAt: "2026-07-24T10:03:00.000Z",
+          },
+        ],
+      ),
+    ).toContain("Contents 设为 Read and write");
+  });
 });

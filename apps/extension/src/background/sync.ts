@@ -16,6 +16,7 @@ import {
 import { githubAccessToken } from "./auth";
 import { setFailureBadge } from "./badge";
 import { database, type StoredSyncJob } from "./database";
+import { githubSyncFailureMessage } from "./github-errors";
 import { readSettings } from "./settings";
 
 function safeSegment(value: string): string {
@@ -200,10 +201,7 @@ export async function runSyncJob(jobId: string): Promise<void> {
           : cause instanceof TypeError
             ? "INVALID_SYNC_INPUT"
             : "GITHUB_COMMIT_FAILED",
-      lastErrorMessage:
-        cause instanceof Error && cause.message.trim()
-          ? cause.message.trim()
-          : "GitHub 提交失败",
+      lastErrorMessage: githubSyncFailureMessage(cause),
       nextAttemptAt: retryable
         ? new Date(
             Date.now() + retryDelayMs(syncing.attempts),
