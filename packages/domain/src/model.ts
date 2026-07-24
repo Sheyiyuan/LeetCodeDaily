@@ -8,7 +8,8 @@ export type HydrationState =
   | "pending-hydration"
   | "retry-wait"
   | "hydrated"
-  | "retryable-failure";
+  | "retryable-failure"
+  | "permanent-failure";
 
 export type SyncJobState =
   | "pending"

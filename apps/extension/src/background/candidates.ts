@@ -5,6 +5,7 @@ import {
   retryDelayMs,
   type SubmissionCandidate,
 } from "@leetcode-daily/domain";
+import { LeetCodeApiError } from "@leetcode-daily/leetcode-cn";
 
 import { setCompletedBadge, setFailureBadge } from "./badge";
 import { syncActivityToCloud } from "./activity-sync";
@@ -101,14 +102,20 @@ async function hydrateCandidate(key: string): Promise<void> {
       await setCompletedBadge();
     }
   } catch (cause) {
+    const retryable =
+      cause instanceof LeetCodeApiError ? cause.retryable : true;
     await db.put("candidates", {
       ...candidate,
-      hydrationState: "retryable-failure",
+      hydrationState: retryable
+        ? "retryable-failure"
+        : "permanent-failure",
       attempts: candidate.attempts + 1,
       lastError: cause instanceof Error ? cause.message : "详情补全失败",
-      nextAttemptAt: new Date(
-        Date.now() + retryDelayMs(candidate.attempts + 1),
-      ).toISOString(),
+      nextAttemptAt: retryable
+        ? new Date(
+            Date.now() + retryDelayMs(candidate.attempts + 1),
+          ).toISOString()
+        : null,
       updatedAt: new Date().toISOString(),
     });
     await setFailureBadge();
@@ -121,6 +128,7 @@ export async function retryCandidates(force = false): Promise<void> {
   const candidates = await db.getAll("candidates");
   for (const candidate of candidates) {
     if (candidate.hydrationState === "hydrated") continue;
+    if (candidate.hydrationState === "permanent-failure" && !force) continue;
     if (!force && candidate.nextAttemptAt && candidate.nextAttemptAt > now) {
       continue;
     }

@@ -69,16 +69,27 @@ export async function countCandidateStates(): Promise<{
   failed: number;
 }> {
   const db = await database();
-  const [pending, retrying, failed, syncPending, syncFailed] = await Promise.all([
+  const [
+    pending,
+    retrying,
+    failed,
+    permanentCandidateFailures,
+    syncPending,
+    syncFailed,
+    permanentSyncFailures,
+  ] = await Promise.all([
     db.countFromIndex("candidates", "by-state", "pending-hydration"),
     db.countFromIndex("candidates", "by-state", "retry-wait"),
     db.countFromIndex("candidates", "by-state", "retryable-failure"),
+    db.countFromIndex("candidates", "by-state", "permanent-failure"),
     db.countFromIndex("syncJobs", "by-state", "pending"),
     db.countFromIndex("syncJobs", "by-state", "retryable-failure"),
+    db.countFromIndex("syncJobs", "by-state", "permanent-failure"),
   ]);
   return {
     pending: pending + retrying + syncPending,
-    failed: failed + syncFailed,
+    failed:
+      failed + permanentCandidateFailures + syncFailed + permanentSyncFailures,
   };
 }
 

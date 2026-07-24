@@ -5,6 +5,7 @@ import {
 } from "@leetcode-daily/domain";
 import {
   GitHubAtomicCommitClient,
+  GitHubSyncError,
   type CommitFile,
 } from "@leetcode-daily/github-sync";
 import {
@@ -178,15 +179,26 @@ export async function runSyncJob(jobId: string): Promise<void> {
       updatedAt: new Date().toISOString(),
     });
   } catch (cause) {
+    const retryable =
+      cause instanceof GitHubSyncError
+        ? cause.retryable
+        : !(cause instanceof TypeError);
     await db.put("syncJobs", {
       ...syncing,
-      state: "retryable-failure",
-      lastErrorCode: "GITHUB_COMMIT_FAILED",
+      state: retryable ? "retryable-failure" : "permanent-failure",
+      lastErrorCode:
+        cause instanceof GitHubSyncError
+          ? `GITHUB_HTTP_${cause.status}`
+          : cause instanceof TypeError
+            ? "INVALID_SYNC_INPUT"
+            : "GITHUB_COMMIT_FAILED",
       lastErrorMessage:
         cause instanceof Error ? cause.message : "GitHub 提交失败",
-      nextAttemptAt: new Date(
-        Date.now() + retryDelayMs(syncing.attempts),
-      ).toISOString(),
+      nextAttemptAt: retryable
+        ? new Date(
+            Date.now() + retryDelayMs(syncing.attempts),
+          ).toISOString()
+        : null,
       updatedAt: new Date().toISOString(),
     });
     await setFailureBadge();
@@ -198,8 +210,24 @@ export async function retrySyncJobs(force = false): Promise<void> {
   const now = new Date().toISOString();
   const jobs = await db.getAll("syncJobs");
   for (const job of jobs) {
-    if (job.state === "succeeded" || job.state === "syncing") continue;
-    if (!force && job.nextAttemptAt && job.nextAttemptAt > now) continue;
+    if (!shouldRetrySyncJob(job, now, force)) continue;
     await runSyncJob(job.id);
   }
+}
+
+const STALE_SYNCING_MS = 5 * 60 * 1_000;
+
+export function shouldRetrySyncJob(
+  job: Pick<StoredSyncJob, "state" | "updatedAt" | "nextAttemptAt">,
+  now: string,
+  force: boolean,
+): boolean {
+  if (job.state === "succeeded") return false;
+  if (job.state === "permanent-failure") return force;
+  if (job.state === "syncing") {
+    return (
+      Date.parse(now) - Date.parse(job.updatedAt) >= STALE_SYNCING_MS
+    );
+  }
+  return force || !job.nextAttemptAt || job.nextAttemptAt <= now;
 }
