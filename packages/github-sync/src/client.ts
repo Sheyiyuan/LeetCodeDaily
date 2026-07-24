@@ -1,0 +1,199 @@
+export interface RepositoryTarget {
+  owner: string;
+  repository: string;
+  branch: string;
+}
+
+export interface CommitFile {
+  path: string;
+  content: string;
+}
+
+export interface AtomicCommitInput extends RepositoryTarget {
+  message: string;
+  files: CommitFile[];
+}
+
+export interface AtomicCommitResult {
+  commitSha: string;
+  treeSha: string;
+}
+
+export class GitHubSyncError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryable: boolean,
+  ) {
+    super(message);
+    this.name = "GitHubSyncError";
+  }
+}
+
+export interface GitHubAtomicCommitClientOptions {
+  token: string;
+  fetch?: typeof fetch;
+  apiBaseUrl?: string;
+}
+
+export class GitHubAtomicCommitClient {
+  private readonly token: string;
+  private readonly fetchImpl: typeof fetch;
+  private readonly apiBaseUrl: string;
+
+  constructor(options: GitHubAtomicCommitClientOptions) {
+    this.token = options.token;
+    this.fetchImpl = options.fetch ?? fetch;
+    this.apiBaseUrl = options.apiBaseUrl ?? "https://api.github.com";
+  }
+
+  async commitFiles(input: AtomicCommitInput): Promise<AtomicCommitResult> {
+    validateInput(input);
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.commitFilesOnce(input);
+      } catch (error) {
+        lastError = error;
+        if (
+          !(error instanceof GitHubSyncError) ||
+          !error.retryable ||
+          attempt === 1
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("GitHub commit failed");
+  }
+
+  private async commitFilesOnce(
+    input: AtomicCommitInput,
+  ): Promise<AtomicCommitResult> {
+    const repositoryPath = `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repository)}`;
+    const ref = await this.request<{ object: { sha: string } }>(
+      `${repositoryPath}/git/ref/heads/${encodeURIComponent(input.branch)}`,
+      { method: "GET" },
+    );
+    const parentSha = ref.object.sha;
+    const parent = await this.request<{ tree: { sha: string } }>(
+      `${repositoryPath}/git/commits/${parentSha}`,
+      { method: "GET" },
+    );
+
+    const blobs = await Promise.all(
+      input.files.map(async (file) => {
+        const blob = await this.request<{ sha: string }>(
+          `${repositoryPath}/git/blobs`,
+          {
+            method: "POST",
+            body: JSON.stringify({ content: file.content, encoding: "utf-8" }),
+          },
+        );
+        return { path: file.path, sha: blob.sha };
+      }),
+    );
+
+    const tree = await this.request<{ sha: string }>(
+      `${repositoryPath}/git/trees`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          base_tree: parent.tree.sha,
+          tree: blobs.map((blob) => ({
+            path: blob.path,
+            mode: "100644",
+            type: "blob",
+            sha: blob.sha,
+          })),
+        }),
+      },
+    );
+
+    const commit = await this.request<{ sha: string }>(
+      `${repositoryPath}/git/commits`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          message: input.message,
+          tree: tree.sha,
+          parents: [parentSha],
+        }),
+      },
+    );
+
+    await this.request(
+      `${repositoryPath}/git/refs/heads/${encodeURIComponent(input.branch)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ sha: commit.sha, force: false }),
+      },
+    );
+
+    return { commitSha: commit.sha, treeSha: tree.sha };
+  }
+
+  private async request<T = unknown>(
+    path: string,
+    init: RequestInit,
+  ): Promise<T> {
+    const response = await this.fetchImpl(`${this.apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2026-03-10",
+        ...init.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new GitHubSyncError(
+        body?.message ?? `GitHub returned HTTP ${response.status}`,
+        response.status,
+        response.status === 409 ||
+          response.status === 422 ||
+          response.status === 429 ||
+          response.status >= 500,
+      );
+    }
+
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+}
+
+function validateInput(input: AtomicCommitInput): void {
+  if (!input.owner || !input.repository || !input.branch) {
+    throw new TypeError("owner, repository and branch are required");
+  }
+  if (!input.message.trim()) {
+    throw new TypeError("commit message is required");
+  }
+  if (input.files.length === 0) {
+    throw new TypeError("at least one file is required");
+  }
+
+  const paths = new Set<string>();
+  for (const file of input.files) {
+    if (
+      !file.path ||
+      file.path.startsWith("/") ||
+      file.path.includes("..") ||
+      file.path.includes("\\")
+    ) {
+      throw new TypeError(`unsafe repository path: ${file.path}`);
+    }
+    if (paths.has(file.path)) {
+      throw new TypeError(`duplicate repository path: ${file.path}`);
+    }
+    paths.add(file.path);
+  }
+}
