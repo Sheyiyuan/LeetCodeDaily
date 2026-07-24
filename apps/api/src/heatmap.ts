@@ -133,7 +133,7 @@ export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
     const month = MONTHS[first.getUTCMonth()];
     const week = Math.floor((first.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1_000));
     monthLabels.push(
-      `<text x="${left + week * (cell + gap)}" y="18" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">${month}</text>`,
+      `<text x="${left + week * (cell + gap)}" y="19" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">${month}</text>`,
     );
   }
   const summary = acceptedTotal > 0 ? `${acceptedTotal} accepted` : "No activity yet";
@@ -148,9 +148,9 @@ export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
   ${themeStyle(input.theme)}
   <rect width="1360" height="196" fill="var(--background)"/>
   ${monthLabels}
-  <text x="16" y="${top + 1 * (cell + gap) + 14}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">Mon</text>
-  <text x="16" y="${top + 3 * (cell + gap) + 14}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">Wed</text>
-  <text x="16" y="${top + 5 * (cell + gap) + 14}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="14">Fri</text>
+  <text x="16" y="${top + 1 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Mon</text>
+  <text x="16" y="${top + 3 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Wed</text>
+  <text x="16" y="${top + 5 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Fri</text>
   ${cells.join("")}
 </svg>`;
 }

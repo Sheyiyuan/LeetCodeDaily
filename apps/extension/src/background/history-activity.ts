@@ -21,7 +21,8 @@ export async function ensureHistoryActivityBackfill(username: string): Promise<v
   activeEnsure ??= ensureBackfill(username).finally(() => {
     activeEnsure = null;
   });
-  return activeEnsure;
+  await activeEnsure;
+  await runHistoryActivityBackfill();
 }
 
 async function ensureBackfill(username: string): Promise<void> {
