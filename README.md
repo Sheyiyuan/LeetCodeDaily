@@ -75,6 +75,8 @@ GitHub App 需要：
 
 `TOKEN_ENCRYPTION_KEY` 必须是随机 32 字节密钥的 Base64。`GITHUB_CLIENT_SECRET` 和该密钥只能通过 Worker secrets / `.dev.vars` 配置，不能进入扩展包或提交到仓库。
 
+密钥轮换时设置 `TOKEN_ENCRYPTION_KEY_RING`，例如 `{"activeVersion":2,"keys":{"1":"<old-base64>","2":"<new-base64>"}}`。保留旧 key，直到 D1 中 `key_version` 全部变为新版本，再删除旧 key。
+
 ## 热力图
 
 用户连接 GitHub 并开启公开热力图后，地址固定为：
@@ -99,7 +101,7 @@ GitHub Profile README 示例（根据 GitHub 深浅主题自动选择）：
 
 - 用真实登录账号验证并固化 `leetcode.cn` 的账号题量、提交详情和历史分页响应 fixture
 - 接入真实 GitHub App / D1 / Worker 域名做端到端授权与提交测试
-- 应用 `0003_rate_limits.sql` 并部署最新 Worker
+- 应用 `0003_rate_limits.sql`、`0004_activity_snapshots.sql`、`0005_auth_grant_key_versions.sql` 并部署最新 Worker
 - 公开隐私政策/支持页面，补充商店截图与可接收联系的邮箱
 - 完成题目正文版权复核和 Chrome Web Store 后台配置
 

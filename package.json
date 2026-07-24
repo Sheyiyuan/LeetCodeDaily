@@ -4,6 +4,10 @@
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "scripts": {
+    "format:check": "node scripts/check-quality.mjs format",
+    "lint": "node scripts/check-quality.mjs lint",
+    "worker:smoke": "node scripts/worker-local-smoke.mjs",
+    "extension:check": "node scripts/check-extension-dist.mjs",
     "build": "pnpm -r --if-present build",
     "extension:package": "./scripts/package-extension.sh",
     "typecheck": "pnpm -r --if-present typecheck",
@@ -11,6 +15,7 @@
     "test:run": "pnpm -r --if-present test:run"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.5",
     "@types/node": "^26.1.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
