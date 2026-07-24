@@ -77,7 +77,7 @@ function ActivityGrid({ days, today }: { days: ActivityDaySummary[]; today: stri
           ))}
         </div>
       </div>
-      <div className="activity-grid" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+      <div className="activity-grid" style={{ gridTemplateColumns: "repeat(10, minmax(0, 1fr))" }}>
         {dates.map((date) => {
           const day = activityByDate.get(date);
           const distinct = day?.distinctProblemCount ?? 0;
