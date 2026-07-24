@@ -147,7 +147,7 @@ export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
   <title>${escapeXml(ariaLabel)}</title>
   ${themeStyle(input.theme)}
   <rect width="1360" height="196" fill="var(--background)"/>
-  ${monthLabels}
+  ${monthLabels.join("")}
   <text x="16" y="${top + 1 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Mon</text>
   <text x="16" y="${top + 3 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Wed</text>
   <text x="16" y="${top + 5 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Fri</text>

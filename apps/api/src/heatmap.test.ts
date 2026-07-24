@@ -24,6 +24,8 @@ describe("renderHeatmapDocument", () => {
     expect(svg).toContain('width="1360" height="196" viewBox="0 0 1360 196"');
     expect(svg).toContain(">Jan</text>");
     expect(svg).toContain(">Mon</text>");
+    expect(svg).toContain('font-size="16">Jan</text>');
+    expect(svg).not.toContain("</text>,<text");
     expect(svg).not.toContain("LeetCode Activity</text>");
     expect(svg).not.toContain(">Less</text>");
     expect(svg).not.toContain("prefers-color-scheme");
