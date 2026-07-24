@@ -99,5 +99,12 @@ GitHub Profile README 示例（根据 GitHub 深浅主题自动选择）：
 
 - 用真实登录账号验证并固化 `leetcode.cn` 的账号题量、提交详情和历史分页响应 fixture
 - 接入真实 GitHub App / D1 / Worker 域名做端到端授权与提交测试
-- 完成历史代码导入与可靠重试
-- 完成隐私政策、权限说明、正文版权复核和 Chrome Web Store 素材
+- 应用 `0003_rate_limits.sql` 并部署最新 Worker
+- 公开隐私政策/支持页面，补充商店截图与可接收联系的邮箱
+- 完成题目正文版权复核和 Chrome Web Store 后台配置
+
+生成可上传商店的 zip：
+
+```bash
+pnpm extension:package
+```
