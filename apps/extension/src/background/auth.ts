@@ -21,6 +21,8 @@ interface AuthExchangeResponse {
   github: { id: number; login: string };
 }
 
+let accessTokenRefresh: Promise<string | null> | null = null;
+
 async function responseJson<T>(response: Response): Promise<T> {
   const body = (await response.json().catch(() => null)) as
     | (T & { error?: string })
@@ -124,6 +126,13 @@ export async function githubAccessToken(): Promise<string | null> {
     return session.githubAccessToken;
   }
 
+  accessTokenRefresh ??= refreshAccessToken().finally(() => {
+    accessTokenRefresh = null;
+  });
+  return accessTokenRefresh;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
   const localToken = await sessionToken();
   if (!localToken) return null;
   const refreshed = await responseJson<{
