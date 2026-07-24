@@ -58,6 +58,17 @@ function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function dateKeyInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function cssVariables(colors: typeof LIGHT_COLORS): string {
   return [
     `--background:${colors.background}`,
@@ -163,11 +174,12 @@ export async function renderHeatmap(
   rolling = false,
 ): Promise<Response> {
   const account = await env.DB.prepare(
-    `SELECT a.github_user_id, a.current_login, h.public_enabled, h.updated_at
+    `SELECT a.github_user_id, a.current_login, h.public_enabled,
+            COALESCE(h.timezone, 'UTC') AS timezone, h.updated_at
        FROM github_login_aliases AS alias
        JOIN github_accounts AS a
          ON a.github_user_id = alias.github_user_id
-       LEFT JOIN heatmap_settings AS h
+      LEFT JOIN heatmap_settings AS h
          ON h.github_user_id = a.github_user_id
       WHERE alias.normalized_login = ? COLLATE NOCASE`,
   )
@@ -176,6 +188,7 @@ export async function renderHeatmap(
       github_user_id: number;
       current_login: string;
       public_enabled: number | null;
+      timezone: string;
       updated_at: string | null;
     }>();
 
@@ -187,7 +200,9 @@ export async function renderHeatmap(
     );
   }
 
-  const lastDate = rolling ? new Date() : dateAtUtc(year, 11, 31);
+  const lastDate = rolling
+    ? new Date(`${dateKeyInTimeZone(new Date(), account.timezone)}T00:00:00Z`)
+    : dateAtUtc(year, 11, 31);
   const firstDate = new Date(lastDate);
   if (rolling) firstDate.setUTCDate(firstDate.getUTCDate() - 364);
   else firstDate.setUTCMonth(0, 1);
