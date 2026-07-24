@@ -38,9 +38,7 @@ describe("LeetCodeCnClient", () => {
 
     const result = await client.getQuestion("two-sum");
     expect(result.translatedTitle).toBe("两数之和");
-    expect(result.canonicalUrl).toBe(
-      "https://leetcode.cn/problems/two-sum/",
-    );
+    expect(result.canonicalUrl).toBe("https://leetcode.cn/problems/two-sum/");
   });
 
   it("always sends credentials to leetcode.cn", async () => {
@@ -55,6 +53,7 @@ describe("LeetCodeCnClient", () => {
             userStatus: {
               isSignedIn: false,
               username: "",
+              realName: null,
               avatar: null,
             },
           },
@@ -65,6 +64,27 @@ describe("LeetCodeCnClient", () => {
     await client.getAccountStatus();
     expect(input).toBe("https://leetcode.cn/graphql/");
     expect(init?.credentials).toBe("include");
+  });
+
+  it("maps the LeetCode display name separately from the user id", async () => {
+    const client = new LeetCodeCnClient({
+      fetch: async () =>
+        jsonResponse({
+          data: {
+            userStatus: {
+              isSignedIn: true,
+              username: "vvi2ardly-visvesvarayaigk",
+              realName: "YPSH",
+              avatar: null,
+            },
+          },
+        }),
+    });
+
+    await expect(client.getAccountStatus()).resolves.toMatchObject({
+      username: "vvi2ardly-visvesvarayaigk",
+      displayName: "YPSH",
+    });
   });
 
   it("maps the Chinese accepted-question progress response", async () => {
@@ -216,9 +236,7 @@ describe("LeetCodeCnClient", () => {
         }),
     });
 
-    await expect(client.getAcceptedSubmissions("two-sum")).resolves.toHaveLength(
-      2,
-    );
+    await expect(client.getAcceptedSubmissions("two-sum")).resolves.toHaveLength(2);
   });
 
   it("reads only the first accepted page when resolving a live candidate", async () => {
@@ -250,9 +268,7 @@ describe("LeetCodeCnClient", () => {
       },
     });
 
-    await expect(
-      client.getRecentAcceptedSubmissions("two-sum", 100),
-    ).resolves.toEqual([
+    await expect(client.getRecentAcceptedSubmissions("two-sum", 100)).resolves.toEqual([
       {
         id: "103",
         titleSlug: "two-sum",

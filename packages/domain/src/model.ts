@@ -22,6 +22,7 @@ export interface AccountStatus {
   site: LeetCodeSite;
   isSignedIn: boolean;
   username: string | null;
+  displayName: string | null;
   avatarUrl: string | null;
   observedAt: string;
 }

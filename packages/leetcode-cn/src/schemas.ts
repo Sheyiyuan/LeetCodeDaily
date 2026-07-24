@@ -13,6 +13,7 @@ export const userStatusDataSchema = z.object({
   userStatus: z.object({
     isSignedIn: z.boolean(),
     username: z.string(),
+    realName: z.string().nullable(),
     avatar: z.string().nullable(),
   }),
 });

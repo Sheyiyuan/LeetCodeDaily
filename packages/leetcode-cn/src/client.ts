@@ -64,9 +64,7 @@ export function latestAcceptedByLanguage(
       latest.set(submission.language, submission);
     }
   }
-  return [...latest.values()].sort((left, right) =>
-    left.language.localeCompare(right.language),
-  );
+  return [...latest.values()].sort((left, right) => left.language.localeCompare(right.language));
 }
 
 export class LeetCodeCnClient {
@@ -78,17 +76,13 @@ export class LeetCodeCnClient {
   }
 
   async getAccountStatus(): Promise<AccountStatus> {
-    const data = await this.request(
-      "globalData",
-      USER_STATUS_QUERY,
-      {},
-      userStatusDataSchema,
-    );
+    const data = await this.request("globalData", USER_STATUS_QUERY, {}, userStatusDataSchema);
     const { userStatus } = data;
     return {
       site: LEETCODE_SITE,
       isSignedIn: userStatus.isSignedIn,
       username: userStatus.username || null,
+      displayName: userStatus.realName?.trim() || null,
       avatarUrl: userStatus.avatar,
       observedAt: new Date().toISOString(),
     };
@@ -102,11 +96,7 @@ export class LeetCodeCnClient {
       questionDataSchema,
     );
     if (!data.question) {
-      throw new LeetCodeApiError(
-        "INVALID_RESPONSE",
-        `Question not found: ${titleSlug}`,
-        false,
-      );
+      throw new LeetCodeApiError("INVALID_RESPONSE", `Question not found: ${titleSlug}`, false);
     }
     const question = data.question;
     return {
@@ -132,11 +122,7 @@ export class LeetCodeCnClient {
       solvedStatsDataSchema,
     );
     if (!data.userProfileUserQuestionProgressV2) {
-      throw new LeetCodeApiError(
-        "INVALID_RESPONSE",
-        `User not found: ${username}`,
-        false,
-      );
+      throw new LeetCodeApiError("INVALID_RESPONSE", `User not found: ${username}`, false);
     }
 
     const counts = new Map(
@@ -207,11 +193,7 @@ export class LeetCodeCnClient {
       );
     }
     if (!parsed.data.user_name.trim()) {
-      throw new LeetCodeApiError(
-        "SIGNED_OUT",
-        "尚未登录力扣中国站",
-        false,
-      );
+      throw new LeetCodeApiError("SIGNED_OUT", "尚未登录力扣中国站", false);
     }
     return parsed.data.stat_status_pairs
       .filter((item) => item.status === "ac")
@@ -222,21 +204,14 @@ export class LeetCodeCnClient {
       }));
   }
 
-  async getAcceptedSubmissions(
-    titleSlug: string,
-  ): Promise<AcceptedSubmissionSummary[]> {
+  async getAcceptedSubmissions(titleSlug: string): Promise<AcceptedSubmissionSummary[]> {
     const all: AcceptedSubmissionSummary[] = [];
     let offset = 0;
     let lastKey: string | null = null;
     let hasNext = true;
 
     for (let page = 0; hasNext && page < 200; page += 1) {
-      const result = await this.getAcceptedSubmissionPage(
-        titleSlug,
-        offset,
-        20,
-        lastKey,
-      );
+      const result = await this.getAcceptedSubmissionPage(titleSlug, offset, 20, lastKey);
       all.push(...result.submissions);
       offset += result.receivedCount;
       lastKey = result.lastKey;
@@ -251,20 +226,12 @@ export class LeetCodeCnClient {
     titleSlug: string,
     limit = 20,
   ): Promise<AcceptedSubmissionSummary[]> {
-    const safeLimit = Number.isFinite(limit)
-      ? Math.min(Math.max(Math.trunc(limit), 1), 20)
-      : 20;
-    return (
-      await this.getAcceptedSubmissionPage(titleSlug, 0, safeLimit, null)
-    ).submissions;
+    const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 20) : 20;
+    return (await this.getAcceptedSubmissionPage(titleSlug, 0, safeLimit, null)).submissions;
   }
 
-  async getLatestAcceptedByLanguage(
-    titleSlug: string,
-  ): Promise<AcceptedSubmissionSummary[]> {
-    return latestAcceptedByLanguage(
-      await this.getAcceptedSubmissions(titleSlug),
-    );
+  async getLatestAcceptedByLanguage(titleSlug: string): Promise<AcceptedSubmissionSummary[]> {
+    return latestAcceptedByLanguage(await this.getAcceptedSubmissions(titleSlug));
   }
 
   private async getAcceptedSubmissionPage(
@@ -345,20 +312,12 @@ export class LeetCodeCnClient {
     return parsed.data;
   }
 
-  private async fetchResponse(
-    input: RequestInfo | URL,
-    init: RequestInit,
-  ): Promise<Response> {
+  private async fetchResponse(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
     let response: Response;
     try {
       response = await this.fetchImpl(input, init);
     } catch (cause) {
-      throw new LeetCodeApiError(
-        "HTTP_ERROR",
-        "Unable to reach leetcode.cn",
-        true,
-        { cause },
-      );
+      throw new LeetCodeApiError("HTTP_ERROR", "Unable to reach leetcode.cn", true, { cause });
     }
     if (!response.ok) {
       throw new LeetCodeApiError(
@@ -374,12 +333,9 @@ export class LeetCodeCnClient {
     try {
       return await response.json();
     } catch (cause) {
-      throw new LeetCodeApiError(
-        "INVALID_JSON",
-        "leetcode.cn returned invalid JSON",
-        true,
-        { cause },
-      );
+      throw new LeetCodeApiError("INVALID_JSON", "leetcode.cn returned invalid JSON", true, {
+        cause,
+      });
     }
   }
 }

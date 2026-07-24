@@ -3,6 +3,7 @@ export const USER_STATUS_QUERY = /* GraphQL */ `
     userStatus {
       isSignedIn
       username
+      realName
       avatar
     }
   }
