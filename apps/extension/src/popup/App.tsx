@@ -160,7 +160,12 @@ export function App() {
         minute: "2-digit",
       })
     : null;
-  const visibleError = clientError ?? state.error;
+  const visibleError =
+    clientError?.trim() ||
+    state.error?.trim() ||
+    (state.failedCount > 0
+      ? `${state.failedCount} 项任务失败，请点击重试查看原因`
+      : null);
 
   return (
     <main className="popup-shell">
@@ -269,9 +274,13 @@ export function App() {
             </strong>
           </div>
         </div>
+        {visibleError ? (
+          <p className="sync-error-message">
+            <TriangleAlert size={13} />
+            <span>{visibleError}</span>
+          </p>
+        ) : null}
       </section>
-
-      {visibleError ? <div className="error-banner"><TriangleAlert size={14} />{visibleError}</div> : null}
 
       <button className="settings-row" onClick={() => void chrome.runtime.openOptionsPage()} type="button">
         <span><Settings size={15} />GitHub 与同步设置</span>

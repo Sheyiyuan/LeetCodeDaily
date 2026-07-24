@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { latestFailureMessage } from "./dashboard";
+import { dashboardFailureMessage, latestFailureMessage } from "./dashboard";
 
 describe("dashboard failure reporting", () => {
   it("returns the most recently updated candidate or sync error", () => {
@@ -37,11 +37,27 @@ describe("dashboard failure reporting", () => {
         [
           {
             state: "permanent-failure",
-            lastErrorMessage: null,
+            lastErrorMessage: "   ",
             updatedAt: "2026-07-24T10:03:00.000Z",
           },
         ],
       ),
     ).toBeNull();
+  });
+
+  it("always gives legacy failures a visible fallback message", () => {
+    expect(
+      dashboardFailureMessage(
+        [],
+        [
+          {
+            state: "permanent-failure",
+            lastErrorMessage: null,
+            updatedAt: "2026-07-24T10:03:00.000Z",
+          },
+        ],
+        3,
+      ),
+    ).toBe("3 项任务失败，旧记录没有错误详情，请点击重试");
   });
 });

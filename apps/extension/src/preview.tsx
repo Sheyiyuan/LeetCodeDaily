@@ -12,6 +12,9 @@ import type {
   MessageResponse,
 } from "./shared/messages";
 
+const previewParams = new URLSearchParams(window.location.search);
+const showQueueFailure = previewParams.get("failure") === "1";
+
 const dashboard: DashboardState = {
   account: {
     site: "leetcode.cn",
@@ -33,10 +36,12 @@ const dashboard: DashboardState = {
     distinctProblemCount: index % 5,
   })),
   todayLocalDate: "2026-07-30",
-  pendingCount: 1,
-  failedCount: 0,
+  pendingCount: showQueueFailure ? 0 : 1,
+  failedCount: showQueueFailure ? 3 : 0,
   lastSuccessfulRefreshAt: "2026-07-30T08:16:00.000Z",
-  error: null,
+  error: showQueueFailure
+    ? "Git Repository is empty. 正在等待初始化仓库后重试"
+    : null,
 };
 
 const github: GitHubAuthState = {
@@ -143,7 +148,7 @@ function installChromeMock(): void {
 }
 
 installChromeMock();
-const view = new URLSearchParams(window.location.search).get("view");
+const view = previewParams.get("view");
 const loaded = view === "options" ? await import("./options/App") : await import("./popup/App");
 const PreviewApp = loaded.App;
 const previewRoot = document.getElementById("root");

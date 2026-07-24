@@ -25,32 +25,42 @@ export function latestFailureMessage(
     updatedAt: string;
   }>,
 ): string | null {
+  const failures: Array<{ message: string; updatedAt: string }> = [];
+  for (const candidate of candidates) {
+    const message = candidate.lastError?.trim();
+    if (
+      message &&
+      (candidate.hydrationState === "retryable-failure" ||
+        candidate.hydrationState === "permanent-failure")
+    ) {
+      failures.push({ message, updatedAt: candidate.updatedAt });
+    }
+  }
+  for (const job of syncJobs) {
+    const message = job.lastErrorMessage?.trim();
+    if (
+      message &&
+      (job.state === "retryable-failure" ||
+        job.state === "permanent-failure")
+    ) {
+      failures.push({ message, updatedAt: job.updatedAt });
+    }
+  }
+  return failures.sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  )[0]?.message ?? null;
+}
+
+export function dashboardFailureMessage(
+  candidates: Parameters<typeof latestFailureMessage>[0],
+  syncJobs: Parameters<typeof latestFailureMessage>[1],
+  failedCount: number,
+): string | null {
   return (
-    [
-      ...candidates
-        .filter(
-          (candidate) =>
-            (candidate.hydrationState === "retryable-failure" ||
-              candidate.hydrationState === "permanent-failure") &&
-            candidate.lastError,
-        )
-        .map((candidate) => ({
-          message: candidate.lastError,
-          updatedAt: candidate.updatedAt,
-        })),
-      ...syncJobs
-        .filter(
-          (job) =>
-            (job.state === "retryable-failure" ||
-              job.state === "permanent-failure") &&
-            job.lastErrorMessage,
-        )
-        .map((job) => ({
-          message: job.lastErrorMessage,
-          updatedAt: job.updatedAt,
-        })),
-    ].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
-      ?.message ?? null
+    latestFailureMessage(candidates, syncJobs) ??
+    (failedCount > 0
+      ? `${failedCount} 项任务失败，旧记录没有错误详情，请点击重试`
+      : null)
   );
 }
 
@@ -97,6 +107,7 @@ export async function readDashboard(): Promise<DashboardState> {
     pendingCount: counts.pending + (historyActivity?.state === "running" ? 1 : 0),
     failedCount: counts.failed,
     lastSuccessfulRefreshAt,
-    error: latestFailureMessage(candidates, syncJobs) ?? error,
+    error:
+      dashboardFailureMessage(candidates, syncJobs, counts.failed) ?? error,
   };
 }

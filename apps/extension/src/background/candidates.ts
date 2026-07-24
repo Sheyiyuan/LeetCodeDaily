@@ -81,6 +81,23 @@ async function hydrateCandidate(key: string): Promise<void> {
         knownSubmissionIds,
       );
       if (!submissionId) {
+        if (
+          candidateAlreadyProcessed(
+            recent,
+            candidate,
+            knownSubmissionIds,
+          )
+        ) {
+          await db.put("candidates", {
+            ...candidate,
+            hydrationState: "hydrated",
+            attempts: candidate.attempts + 1,
+            lastError: null,
+            nextAttemptAt: null,
+            updatedAt: new Date().toISOString(),
+          });
+          return;
+        }
         throw new Error("最近提交列表中尚未出现本次 Accepted");
       }
       candidate = { ...candidate, submissionId };
@@ -126,7 +143,7 @@ async function hydrateCandidate(key: string): Promise<void> {
         ? "retryable-failure"
         : "permanent-failure",
       attempts: candidate.attempts + 1,
-      lastError: cause instanceof Error ? cause.message : "详情补全失败",
+      lastError: errorMessage(cause, "详情补全失败"),
       nextAttemptAt: retryable
         ? new Date(
             Date.now() + retryDelayMs(candidate.attempts + 1),
@@ -141,6 +158,41 @@ async function hydrateCandidate(key: string): Promise<void> {
 const CANDIDATE_LOOKBACK_MS = 5 * 60 * 1_000;
 const CANDIDATE_CLOCK_SKEW_MS = 60 * 1_000;
 
+function candidateSubmissionsInWindow(
+  submissions: AcceptedSubmissionSummary[],
+  candidate: Pick<
+    SubmissionCandidate,
+    "titleSlug" | "observedAt" | "previousSubmissionId"
+  >,
+): AcceptedSubmissionSummary[] {
+  const observedAt = Date.parse(candidate.observedAt);
+  if (!Number.isFinite(observedAt)) return [];
+  return submissions.filter((submission) => {
+    const submittedAt = submission.timestamp * 1_000;
+    return (
+      submission.titleSlug === candidate.titleSlug &&
+      submission.id !== candidate.previousSubmissionId &&
+      submittedAt >= observedAt - CANDIDATE_LOOKBACK_MS &&
+      submittedAt <= observedAt + CANDIDATE_CLOCK_SKEW_MS
+    );
+  });
+}
+
+export function candidateAlreadyProcessed(
+  submissions: AcceptedSubmissionSummary[],
+  candidate: Pick<
+    SubmissionCandidate,
+    "titleSlug" | "observedAt" | "previousSubmissionId"
+  >,
+  knownSubmissionIds: ReadonlySet<string>,
+): boolean {
+  const matching = candidateSubmissionsInWindow(submissions, candidate);
+  return (
+    matching.length > 0 &&
+    matching.every((submission) => knownSubmissionIds.has(submission.id))
+  );
+}
+
 export function recentSubmissionIdForCandidate(
   submissions: AcceptedSubmissionSummary[],
   candidate: Pick<
@@ -149,26 +201,19 @@ export function recentSubmissionIdForCandidate(
   >,
   knownSubmissionIds: ReadonlySet<string> = new Set(),
 ): string | null {
-  const observedAt = Date.parse(candidate.observedAt);
-  if (!Number.isFinite(observedAt)) return null;
-
   return (
-    submissions
-      .filter((submission) => {
-        const submittedAt = submission.timestamp * 1_000;
-        return (
-          submission.titleSlug === candidate.titleSlug &&
-          submission.id !== candidate.previousSubmissionId &&
-          !knownSubmissionIds.has(submission.id) &&
-          submittedAt >= observedAt - CANDIDATE_LOOKBACK_MS &&
-          submittedAt <= observedAt + CANDIDATE_CLOCK_SKEW_MS
-        );
-      })
+    candidateSubmissionsInWindow(submissions, candidate)
+      .filter((submission) => !knownSubmissionIds.has(submission.id))
       .sort(
         (left, right) =>
           right.timestamp - left.timestamp || right.id.localeCompare(left.id),
       )[0]?.id ?? null
   );
+}
+
+function errorMessage(cause: unknown, fallback: string): string {
+  if (!(cause instanceof Error)) return fallback;
+  return cause.message.trim() || fallback;
 }
 
 export async function retryCandidates(force = false): Promise<void> {

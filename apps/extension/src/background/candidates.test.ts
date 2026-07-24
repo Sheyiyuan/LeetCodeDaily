@@ -1,7 +1,10 @@
 import type { AcceptedSubmissionSummary } from "@leetcode-daily/leetcode-cn";
 import { describe, expect, it } from "vitest";
 
-import { recentSubmissionIdForCandidate } from "./candidates";
+import {
+  candidateAlreadyProcessed,
+  recentSubmissionIdForCandidate,
+} from "./candidates";
 
 function submission(
   id: string,
@@ -50,5 +53,21 @@ describe("recentSubmissionIdForCandidate", () => {
         },
       ),
     ).toBeNull();
+  });
+
+  it("recognizes a duplicate candidate whose nearby Accepted was already processed", () => {
+    const recent = [submission("103", "2026-07-24T09:59:50.000Z")];
+    const candidate = {
+      titleSlug: "two-sum",
+      observedAt: "2026-07-24T10:00:00.000Z",
+      previousSubmissionId: "102",
+    };
+
+    expect(
+      candidateAlreadyProcessed(recent, candidate, new Set(["103"])),
+    ).toBe(true);
+    expect(
+      candidateAlreadyProcessed(recent, candidate, new Set()),
+    ).toBe(false);
   });
 });

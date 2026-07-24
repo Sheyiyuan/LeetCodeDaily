@@ -374,6 +374,24 @@ input:disabled {
   white-space: nowrap;
 }
 
+.sync-error-message {
+  display: flex;
+  margin: 11px 0 0;
+  align-items: flex-start;
+  gap: 7px;
+  border-top: 1px solid rgb(255 55 95 / 18%);
+  padding-top: 10px;
+  color: var(--hard);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.sync-error-message svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 .status-icon,
 .connection-state {
   display: inline-grid;
