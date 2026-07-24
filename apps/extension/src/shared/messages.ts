@@ -4,6 +4,12 @@ import type {
   SubmissionCandidate,
 } from "@leetcode-daily/domain";
 
+export interface ActivityDaySummary {
+  localDate: string;
+  acceptedSubmissionCount: number;
+  distinctProblemCount: number;
+}
+
 export type ExtensionMessage =
   | {
       type: "accepted-observed";
@@ -40,6 +46,8 @@ export interface GitHubAuthState {
 export interface DashboardState {
   account: AccountStatus | null;
   stats: SolvedStats | null;
+  activityDays: ActivityDaySummary[];
+  todayLocalDate: string;
   pendingCount: number;
   failedCount: number;
   lastSuccessfulRefreshAt: string | null;

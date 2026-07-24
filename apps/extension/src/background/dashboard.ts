@@ -1,8 +1,13 @@
-import type { AccountStatus, SolvedStats } from "@leetcode-daily/domain";
+import {
+  localDateForInstant,
+  type AccountStatus,
+  type SolvedStats,
+} from "@leetcode-daily/domain";
 import { leetcodeClient } from "./leetcode";
 
 import type { DashboardState } from "../shared/messages";
-import { countCandidateStates } from "./database";
+import { countCandidateStates, database } from "./database";
+import { readSettings } from "./settings";
 
 let account: AccountStatus | null = null;
 let stats: SolvedStats | null = null;
@@ -25,10 +30,24 @@ export async function refreshDashboard(): Promise<DashboardState> {
 }
 
 export async function readDashboard(): Promise<DashboardState> {
-  const counts = await countCandidateStates();
+  const [counts, db, settings] = await Promise.all([
+    countCandidateStates(),
+    database(),
+    readSettings(),
+  ]);
+  const activityDays = (await db.getAll("dailyActivity"))
+    .sort((left, right) => left.localDate.localeCompare(right.localDate))
+    .slice(-30)
+    .map((day) => ({
+      localDate: day.localDate,
+      acceptedSubmissionCount: day.acceptedSubmissionCount,
+      distinctProblemCount: day.distinctProblemIds.length,
+    }));
   return {
     account,
     stats,
+    activityDays,
+    todayLocalDate: localDateForInstant(new Date(), settings.timezone),
     pendingCount: counts.pending,
     failedCount: counts.failed,
     lastSuccessfulRefreshAt,

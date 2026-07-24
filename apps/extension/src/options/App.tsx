@@ -1,10 +1,26 @@
-import { useEffect, useState } from "react";
+import {
+  Check,
+  Clipboard,
+  Cloud,
+  Code2,
+  ExternalLink,
+  FolderGit2,
+  GitBranch,
+  Globe2,
+  Moon,
+  Save,
+  Sun,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   ExtensionSettings,
   GitHubAuthState,
   MessageResponse,
 } from "../shared/messages";
+import { useTheme } from "../shared/use-theme";
 
 const FALLBACK: ExtensionSettings = {
   timezone: "Asia/Shanghai",
@@ -14,226 +30,266 @@ const FALLBACK: ExtensionSettings = {
   heatmapPublicEnabled: false,
 };
 
+const EMPTY_GITHUB: GitHubAuthState = {
+  connected: false,
+  login: null,
+  sessionExpiresAt: null,
+  heatmapUrl: null,
+};
+
+function repositoryIsValid(value: string | null): boolean {
+  return value === null || /^[^/\s]+\/[^/\s]+$/.test(value);
+}
+
+function timezoneIsValid(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("zh-CN", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function App() {
   const [settings, setSettings] = useState(FALLBACK);
-  const [github, setGithub] = useState<GitHubAuthState>({
-    connected: false,
-    login: null,
-    sessionExpiresAt: null,
-    heatmapUrl: null,
-  });
+  const [github, setGithub] = useState(EMPTY_GITHUB);
+  const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [theme, toggleTheme] = useTheme();
 
   useEffect(() => {
     void Promise.all([
       chrome.runtime.sendMessage({ type: "settings-read" }),
       chrome.runtime.sendMessage({ type: "github-auth-read" }),
-    ]).then(([settingsResponse, authResponse]: [
-      MessageResponse<ExtensionSettings>,
-      MessageResponse<GitHubAuthState>,
-    ]) => {
-      if (settingsResponse.ok && settingsResponse.data) {
-        setSettings(settingsResponse.data);
-      }
-      if (authResponse.ok && authResponse.data) {
-        setGithub(authResponse.data);
-      }
-    });
+    ])
+      .then(
+        ([settingsResponse, authResponse]: [
+          MessageResponse<ExtensionSettings>,
+          MessageResponse<GitHubAuthState>,
+        ]) => {
+          if (settingsResponse.ok && settingsResponse.data) setSettings(settingsResponse.data);
+          if (authResponse.ok && authResponse.data) setGithub(authResponse.data);
+          if (!settingsResponse.ok) setError(settingsResponse.error ?? "设置读取失败");
+          else if (!authResponse.ok) setError(authResponse.error ?? "GitHub 状态读取失败");
+        },
+      )
+      .finally(() => setLoading(false));
   }, []);
 
-  async function toggleGitHub() {
+  const validationError = useMemo(() => {
+    if (!timezoneIsValid(settings.timezone)) return "请输入有效的 IANA 时区";
+    if (!repositoryIsValid(settings.githubRepository)) return "仓库格式应为 owner/repository";
+    if (!settings.githubBranch.trim()) return "分支不能为空";
+    return null;
+  }, [settings]);
+
+  async function toggleGitHub(): Promise<void> {
     setAuthBusy(true);
-    setAuthError(null);
+    setError(null);
     try {
       const response = (await chrome.runtime.sendMessage({
         type: github.connected ? "github-disconnect" : "github-connect",
       })) as MessageResponse<GitHubAuthState>;
       if (!response.ok) throw new Error(response.error ?? "GitHub 操作失败");
-      setGithub(
-        response.data ?? {
-          connected: false,
-          login: null,
-          sessionExpiresAt: null,
-          heatmapUrl: null,
-        },
-      );
+      setGithub(response.data ?? EMPTY_GITHUB);
     } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : "GitHub 操作失败");
+      setError(cause instanceof Error ? cause.message : "GitHub 操作失败");
     } finally {
       setAuthBusy(false);
     }
   }
 
-  async function deleteAccount() {
-    if (
-      !window.confirm(
-        "这会删除服务端账户、热力图数据和扩展本地记录，且无法撤销。确定继续吗？",
-      )
-    ) {
-      return;
-    }
+  async function deleteAccount(): Promise<void> {
+    if (!window.confirm("将删除服务端账户、热力图数据和本地记录，且无法撤销。")) return;
     setAuthBusy(true);
-    setAuthError(null);
+    setError(null);
     try {
       const response = (await chrome.runtime.sendMessage({
         type: "github-delete-account",
       })) as MessageResponse<undefined>;
       if (!response.ok) throw new Error(response.error ?? "删除账户失败");
-      setGithub({
-        connected: false,
-        login: null,
-        sessionExpiresAt: null,
-        heatmapUrl: null,
-      });
+      setGithub(EMPTY_GITHUB);
     } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : "删除账户失败");
+      setError(cause instanceof Error ? cause.message : "删除账户失败");
     } finally {
       setAuthBusy(false);
     }
   }
 
-  async function save() {
+  async function save(): Promise<void> {
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+    const normalized: ExtensionSettings = {
+      ...settings,
+      timezone: settings.timezone.trim(),
+      githubRepository: settings.githubRepository?.trim() || null,
+      githubBranch: settings.githubBranch.trim(),
+      githubRootDirectory: settings.githubRootDirectory.trim(),
+    };
     const response = (await chrome.runtime.sendMessage({
       type: "settings-write",
-      payload: settings,
+      payload: normalized,
     })) as MessageResponse<undefined>;
-    setSaved(response.ok);
+    if (!response.ok) {
+      setError(response.error ?? "保存失败");
+      return;
+    }
+    setSettings(normalized);
+    setSaved(true);
     window.setTimeout(() => setSaved(false), 1_500);
   }
 
-  return (
-    <main className="mx-auto max-w-2xl p-8">
-      <p className="m-0 text-xs tracking-[0.18em] text-orange-400 uppercase">
-        LeetCodeDaily
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold">设置</h1>
+  async function copyHeatmapUrl(): Promise<void> {
+    if (!github.heatmapUrl) return;
+    await navigator.clipboard.writeText(github.heatmapUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1_500);
+  }
 
-      <section className="mt-8 space-y-5 rounded-3xl border border-white/8 bg-white/4 p-6">
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/8 bg-black/15 p-4">
-          <div>
-            <div className="text-sm font-medium">
-              {github.connected
-                ? `已连接 @${github.login}`
-                : "尚未连接 GitHub"}
-            </div>
-            <div className="mt-1 text-xs text-white/45">
-              通过 GitHub App 授权，无需粘贴访问令牌
-            </div>
-          </div>
-          <button
-            className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
-            disabled={authBusy}
-            onClick={() => void toggleGitHub()}
-            type="button"
-          >
-            {authBusy
-              ? "处理中"
-              : github.connected
-                ? "断开"
-                : "连接 GitHub"}
-          </button>
-        </div>
-        {authError ? (
-          <div className="rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {authError}
-          </div>
-        ) : null}
-        {github.connected ? (
-          <button
-            className="w-fit rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-500/15"
-            disabled={authBusy}
-            onClick={() => void deleteAccount()}
-            type="button"
-          >
-            删除账户数据
-          </button>
-        ) : null}
-        <label className="block">
-          <span className="text-sm text-white/70">统计时区</span>
-          <input
-            className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-orange-400"
-            onChange={(event) =>
-              setSettings({ ...settings, timezone: event.target.value })
-            }
-            value={settings.timezone}
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-white/70">GitHub 仓库</span>
-          <input
-            className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-orange-400"
-            onChange={(event) =>
-              setSettings({
-                ...settings,
-                githubRepository: event.target.value || null,
-              })
-            }
-            placeholder="owner/repository"
-            value={settings.githubRepository ?? ""}
-          />
-        </label>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="block">
-            <span className="text-sm text-white/70">分支</span>
-            <input
-              className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-orange-400"
-              onChange={(event) =>
-                setSettings({ ...settings, githubBranch: event.target.value })
-              }
-              value={settings.githubBranch}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm text-white/70">根目录</span>
-            <input
-              className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 outline-none focus:border-orange-400"
-              onChange={(event) =>
-                setSettings({
-                  ...settings,
-                  githubRootDirectory: event.target.value,
-                })
-              }
-              value={settings.githubRootDirectory}
-            />
-          </label>
-        </div>
-        <label className="flex items-start gap-3 rounded-2xl border border-white/8 bg-black/15 p-4">
-          <input
-            checked={settings.heatmapPublicEnabled}
-            className="mt-1 size-4 accent-orange-500"
-            onChange={(event) =>
-              setSettings({
-                ...settings,
-                heatmapPublicEnabled: event.target.checked,
-              })
-            }
-            type="checkbox"
-          />
+  return (
+    <main className="options-shell">
+      <header className="options-header">
+        <div className="options-brand">
+          <span className="brand-mark large"><Code2 size={20} /></span>
           <span>
-            <span className="block text-sm font-medium">公开刷题热力图</span>
-            <span className="mt-1 block text-xs leading-5 text-white/45">
-              开启后可在 GitHub Profile README 中使用固定 SVG 地址
-            </span>
+            <strong>LeetCodeDaily</strong>
+            <small>leetcode.cn 自动同步</small>
           </span>
-        </label>
-        {github.heatmapUrl ? (
-          <div className="rounded-2xl border border-white/8 bg-black/15 p-4">
-            <div className="text-xs text-white/45">热力图地址</div>
-            <code className="mt-2 block break-all text-xs text-orange-300">
-              {github.heatmapUrl}
-            </code>
-          </div>
-        ) : null}
+        </div>
         <button
-          className="rounded-xl bg-orange-500 px-4 py-2 font-semibold text-black hover:bg-orange-400"
-          onClick={() => void save()}
+          aria-label={theme === "dark" ? "切换到浅色" : "切换到深色"}
+          className="icon-button"
+          onClick={toggleTheme}
+          title={theme === "dark" ? "浅色模式" : "深色模式"}
           type="button"
         >
-          {saved ? "已保存" : "保存设置"}
+          {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
         </button>
+      </header>
+
+      <div className="options-title">
+        <p>设置</p>
+        <h1>同步与账户</h1>
+      </div>
+
+      {error ? <div className="error-banner wide"><TriangleAlert size={15} />{error}</div> : null}
+
+      <section className="settings-section" aria-labelledby="github-section-heading">
+        <div className="settings-section-heading">
+          <FolderGit2 size={18} />
+          <div>
+            <h2 id="github-section-heading">GitHub</h2>
+            <p>账户连接与目标仓库</p>
+          </div>
+        </div>
+        <div className="settings-content">
+          <div className="connection-row">
+            <span className={`connection-state ${github.connected ? "connected" : ""}`}>
+              {github.connected ? <Check size={15} /> : <Cloud size={15} />}
+            </span>
+            <div>
+              <strong>{github.connected ? `已连接 @${github.login}` : "尚未连接 GitHub"}</strong>
+              <small>{github.connected ? "GitHub App 授权有效" : "连接后可同步题解仓库"}</small>
+            </div>
+            <button className="secondary-button" disabled={authBusy} onClick={() => void toggleGitHub()} type="button">
+              {authBusy ? "处理中" : github.connected ? "断开" : "连接 GitHub"}
+            </button>
+          </div>
+
+          <div className="field-grid single">
+            <label>
+              <span>目标仓库</span>
+              <div className="input-with-icon">
+                <FolderGit2 size={15} />
+                <input
+                  disabled={loading}
+                  onChange={(event) => setSettings({ ...settings, githubRepository: event.target.value || null })}
+                  placeholder="owner/repository"
+                  spellCheck={false}
+                  value={settings.githubRepository ?? ""}
+                />
+              </div>
+            </label>
+          </div>
+          <div className="field-grid">
+            <label>
+              <span>分支</span>
+              <div className="input-with-icon"><GitBranch size={15} /><input onChange={(event) => setSettings({ ...settings, githubBranch: event.target.value })} value={settings.githubBranch} /></div>
+            </label>
+            <label>
+              <span>根目录</span>
+              <div className="input-with-icon"><Code2 size={15} /><input onChange={(event) => setSettings({ ...settings, githubRootDirectory: event.target.value })} placeholder="solutions" value={settings.githubRootDirectory} /></div>
+            </label>
+          </div>
+        </div>
       </section>
+
+      <section className="settings-section" aria-labelledby="activity-section-heading">
+        <div className="settings-section-heading">
+          <Globe2 size={18} />
+          <div>
+            <h2 id="activity-section-heading">活动</h2>
+            <p>统计时区与公开热力图</p>
+          </div>
+        </div>
+        <div className="settings-content">
+          <label className="full-field">
+            <span>统计时区</span>
+            <input onChange={(event) => setSettings({ ...settings, timezone: event.target.value })} spellCheck={false} value={settings.timezone} />
+          </label>
+
+          <div className="toggle-row">
+            <div>
+              <strong>公开刷题热力图</strong>
+              <small>允许 GitHub Profile 读取固定 SVG 地址</small>
+            </div>
+            <button
+              aria-checked={settings.heatmapPublicEnabled}
+              aria-label="公开刷题热力图"
+              className={`switch ${settings.heatmapPublicEnabled ? "on" : ""}`}
+              onClick={() => setSettings({ ...settings, heatmapPublicEnabled: !settings.heatmapPublicEnabled })}
+              role="switch"
+              type="button"
+            ><span /></button>
+          </div>
+
+          {github.heatmapUrl ? (
+            <div className="url-row">
+              <code>{github.heatmapUrl}</code>
+              <button aria-label="复制热力图地址" className="icon-button" onClick={() => void copyHeatmapUrl()} title="复制地址" type="button">
+                {copied ? <Check size={15} /> : <Clipboard size={15} />}
+              </button>
+              <a aria-label="打开热力图" className="icon-button" href={github.heatmapUrl} rel="noreferrer" target="_blank" title="打开热力图"><ExternalLink size={15} /></a>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {github.connected ? (
+        <section className="settings-section danger-section" aria-labelledby="data-section-heading">
+          <div className="settings-section-heading">
+            <Trash2 size={18} />
+            <div><h2 id="data-section-heading">账户数据</h2><p>永久删除云端活动与本地记录</p></div>
+          </div>
+          <div className="settings-content danger-content">
+            <span>此操作无法撤销</span>
+            <button className="danger-button" disabled={authBusy} onClick={() => void deleteAccount()} type="button"><Trash2 size={14} />删除账户数据</button>
+          </div>
+        </section>
+      ) : null}
+
+      <footer className="save-bar">
+        <span>{validationError ?? (saved ? "设置已保存" : "")}</span>
+        <button className="primary-button" disabled={loading || Boolean(validationError)} onClick={() => void save()} type="button">
+          {saved ? <Check size={16} /> : <Save size={16} />}{saved ? "已保存" : "保存设置"}
+        </button>
+      </footer>
     </main>
   );
 }

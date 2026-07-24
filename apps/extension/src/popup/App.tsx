@@ -1,57 +1,136 @@
-import type { DashboardState, MessageResponse } from "../shared/messages";
-import { useCallback, useEffect, useState } from "react";
+import { activityLevel } from "@leetcode-daily/domain";
+import {
+  Check,
+  Clock3,
+  Code2,
+  ExternalLink,
+  Moon,
+  RefreshCw,
+  RotateCcw,
+  Settings,
+  Sun,
+  TriangleAlert,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import type {
+  ActivityDaySummary,
+  DashboardState,
+  GitHubAuthState,
+  MessageResponse,
+} from "../shared/messages";
+import { useTheme } from "../shared/use-theme";
 
 const EMPTY: DashboardState = {
   account: null,
   stats: null,
+  activityDays: [],
+  todayLocalDate: new Date().toISOString().slice(0, 10),
   pendingCount: 0,
   failedCount: 0,
   lastSuccessfulRefreshAt: null,
   error: null,
 };
 
+const EMPTY_GITHUB: GitHubAuthState = {
+  connected: false,
+  login: null,
+  sessionExpiresAt: null,
+  heatmapUrl: null,
+};
+
 async function sendDashboardMessage(
   type: "dashboard-read" | "dashboard-refresh" | "retry-all",
 ): Promise<DashboardState> {
-  const response =
-    (await chrome.runtime.sendMessage({
-      type,
-    })) as MessageResponse<DashboardState>;
+  const response = (await chrome.runtime.sendMessage({ type })) as MessageResponse<DashboardState>;
   if (!response.ok || !response.data) {
     throw new Error(response.error ?? "读取状态失败");
   }
   return response.data;
 }
 
-function StatCard({
-  label,
-  value,
-  color,
+function previousDates(endDate: string, count: number): string[] {
+  const end = new Date(`${endDate}T00:00:00Z`);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(end);
+    date.setUTCDate(end.getUTCDate() - (count - index - 1));
+    return date.toISOString().slice(0, 10);
+  });
+}
+
+function ActivityGrid({
+  days,
+  today,
 }: {
-  label: string;
-  value: number;
-  color: string;
+  days: ActivityDaySummary[];
+  today: string;
 }) {
+  const activityByDate = useMemo(
+    () => new Map(days.map((day) => [day.localDate, day])),
+    [days],
+  );
+  const dates = useMemo(() => previousDates(today, 30), [today]);
+  const acceptedCount = dates.reduce(
+    (total, date) => total + (activityByDate.get(date)?.acceptedSubmissionCount ?? 0),
+    0,
+  );
+
   return (
-    <div className="rounded-2xl border border-white/8 bg-white/4 p-3">
-      <div className="text-xs text-white/45">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${color}`}>{value}</div>
-    </div>
+    <section className="panel activity-panel" aria-labelledby="activity-heading">
+      <div className="section-heading">
+        <h2 id="activity-heading">近 30 天</h2>
+        <div className="activity-legend">
+          <strong>{acceptedCount}</strong>
+          <span>次通过</span>
+          {[0, 1, 2, 3, 4].map((level) => (
+            <span className={`activity-cell level-${level}`} key={level} />
+          ))}
+        </div>
+      </div>
+      <div className="activity-grid">
+        {dates.map((date) => {
+          const day = activityByDate.get(date);
+          const distinct = day?.distinctProblemCount ?? 0;
+          const accepted = day?.acceptedSubmissionCount ?? 0;
+          return (
+            <span
+              aria-label={`${date}：${accepted} 次通过，${distinct} 道题`}
+              className={`activity-cell level-${activityLevel(distinct)}`}
+              key={date}
+              title={`${date} · ${accepted} 次通过 · ${distinct} 道题`}
+            />
+          );
+        })}
+      </div>
+      <div className="activity-dates" aria-hidden="true">
+        <span>{dates[0]?.slice(5).replace("-", "/")}</span>
+        <span>{today.slice(5).replace("-", "/")}</span>
+      </div>
+    </section>
   );
 }
 
 export function App() {
   const [state, setState] = useState(EMPTY);
+  const [github, setGithub] = useState(EMPTY_GITHUB);
   const [loading, setLoading] = useState(true);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [theme, toggleTheme] = useTheme();
 
   const load = useCallback(async (refresh: boolean) => {
     setLoading(true);
+    setClientError(null);
     try {
-      setState(
-        await sendDashboardMessage(
-          refresh ? "dashboard-refresh" : "dashboard-read",
-        ),
-      );
+      const [dashboard, githubResponse] = await Promise.all([
+        sendDashboardMessage(refresh ? "dashboard-refresh" : "dashboard-read"),
+        chrome.runtime.sendMessage({ type: "github-auth-read" }) as Promise<
+          MessageResponse<GitHubAuthState>
+        >,
+      ]);
+      setState(dashboard);
+      if (githubResponse.ok && githubResponse.data) setGithub(githubResponse.data);
+    } catch (cause) {
+      setClientError(cause instanceof Error ? cause.message : "刷新失败");
     } finally {
       setLoading(false);
     }
@@ -59,8 +138,11 @@ export function App() {
 
   const retry = useCallback(async () => {
     setLoading(true);
+    setClientError(null);
     try {
       setState(await sendDashboardMessage("retry-all"));
+    } catch (cause) {
+      setClientError(cause instanceof Error ? cause.message : "重试失败");
     } finally {
       setLoading(false);
     }
@@ -70,114 +152,130 @@ export function App() {
     void load(true);
   }, [load]);
 
+  const signedIn = state.account?.isSignedIn === true;
+  const displayName = signedIn ? state.account?.username : "LeetCodeDaily";
+  const updatedAt = state.lastSuccessfulRefreshAt
+    ? new Date(state.lastSuccessfulRefreshAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+  const visibleError = clientError ?? state.error;
+
   return (
-    <main className="w-[360px] p-4">
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="m-0 text-xs font-medium tracking-[0.18em] text-orange-400 uppercase">
-            leetcode.cn
-          </p>
-          <h1 className="m-0 mt-1 text-xl font-semibold">LeetCodeDaily</h1>
-        </div>
-        <button
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70 hover:bg-white/10"
-          disabled={loading}
-          onClick={() => void load(true)}
-          type="button"
+    <main className="popup-shell">
+      <header className="popup-header">
+        <a
+          className="profile-link"
+          href={
+            signedIn && state.account?.username
+              ? `https://leetcode.cn/u/${encodeURIComponent(state.account.username)}`
+              : "https://leetcode.cn/"
+          }
+          rel="noreferrer"
+          target="_blank"
         >
-          {loading ? "同步中" : "刷新"}
-        </button>
+          {state.account?.avatarUrl ? (
+            <img alt="" className="avatar" src={state.account.avatarUrl} />
+          ) : (
+            <span className="brand-mark"><Code2 size={17} /></span>
+          )}
+          <span>
+            <strong>{displayName}</strong>
+            <small>{signedIn ? `leetcode.cn${updatedAt ? ` · ${updatedAt}` : ""}` : "仅连接力扣中国站"}</small>
+          </span>
+        </a>
+        <div className="header-actions">
+          <button
+            aria-label="刷新"
+            className="icon-button"
+            disabled={loading}
+            onClick={() => void load(true)}
+            title="刷新"
+            type="button"
+          >
+            <RefreshCw className={loading ? "spin" : ""} size={16} />
+          </button>
+          <button
+            aria-label={theme === "dark" ? "切换到浅色" : "切换到深色"}
+            className="icon-button"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "浅色模式" : "深色模式"}
+            type="button"
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            aria-label="设置"
+            className="icon-button"
+            onClick={() => void chrome.runtime.openOptionsPage()}
+            title="设置"
+            type="button"
+          >
+            <Settings size={16} />
+          </button>
+        </div>
       </header>
 
-      <section className="mt-5 rounded-3xl border border-white/8 bg-white/4 p-4">
-        <div className="flex items-center gap-3">
-          {state.account?.avatarUrl ? (
-            <img
-              alt=""
-              className="size-10 rounded-full"
-              src={state.account.avatarUrl}
-            />
-          ) : (
-            <div className="grid size-10 place-items-center rounded-full bg-orange-500/15 text-orange-400">
-              LC
-            </div>
-          )}
+      {!signedIn && !loading ? (
+        <a className="notice-row" href="https://leetcode.cn/accounts/login/" rel="noreferrer" target="_blank">
+          <span>登录力扣中国站后显示刷题数据</span>
+          <ExternalLink size={14} />
+        </a>
+      ) : null}
+
+      <section className="panel stats-panel" aria-label="已解决题目统计">
+        <div className="total-stat">
+          <span>已解决</span>
+          <strong>{loading && !state.stats ? "-" : (state.stats?.total ?? 0)}</strong>
+        </div>
+        <div className="difficulty-stats">
+          <span><strong className="easy">{state.stats?.easy ?? 0}</strong>简单</span>
+          <span><strong className="medium">{state.stats?.medium ?? 0}</strong>中等</span>
+          <span><strong className="hard">{state.stats?.hard ?? 0}</strong>困难</span>
+        </div>
+      </section>
+
+      <ActivityGrid days={state.activityDays} today={state.todayLocalDate} />
+
+      <section className="panel sync-panel" aria-labelledby="sync-heading">
+        <div className="section-heading">
+          <h2 id="sync-heading">同步状态</h2>
+          {state.failedCount > 0 ? (
+            <button className="small-command danger" disabled={loading} onClick={() => void retry()} type="button">
+              <RotateCcw size={13} />重试
+            </button>
+          ) : null}
+        </div>
+        <div className="status-list">
           <div>
-            <div className="text-sm font-medium">
-              {state.account?.isSignedIn
-                ? state.account.username
-                : "尚未登录力扣中国站"}
-            </div>
-            <div className="mt-1 text-xs text-white/40">
-              {state.lastSuccessfulRefreshAt
-                ? `更新于 ${new Date(state.lastSuccessfulRefreshAt).toLocaleTimeString()}`
-                : "等待首次同步"}
-            </div>
+            <span className={`status-icon ${github.connected ? "success" : "muted"}`}>
+              {github.connected ? <Check size={13} /> : <Code2 size={13} />}
+            </span>
+            <span>GitHub</span>
+            <strong>{github.connected ? `@${github.login}` : "未连接"}</strong>
           </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          <StatCard
-            color="text-white"
-            label="全部"
-            value={state.stats?.total ?? 0}
-          />
-          <StatCard
-            color="text-emerald-400"
-            label="简单"
-            value={state.stats?.easy ?? 0}
-          />
-          <StatCard
-            color="text-amber-400"
-            label="中等"
-            value={state.stats?.medium ?? 0}
-          />
-          <StatCard
-            color="text-rose-400"
-            label="困难"
-            value={state.stats?.hard ?? 0}
-          />
-        </div>
-      </section>
-
-      <section className="mt-3 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
-          <div className="text-xs text-white/45">等待处理</div>
-          <div className="mt-1 text-2xl font-semibold">
-            {state.pendingCount}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
-          <div className="text-xs text-white/45">需要重试</div>
-          <div className="mt-1 text-2xl font-semibold text-rose-400">
-            {state.failedCount}
+          <div>
+            <span className={`status-icon ${state.failedCount > 0 ? "failure" : state.pendingCount > 0 ? "pending" : "success"}`}>
+              {state.failedCount > 0 ? <TriangleAlert size={13} /> : state.pendingCount > 0 ? <Clock3 size={13} /> : <Check size={13} />}
+            </span>
+            <span>提交队列</span>
+            <strong>
+              {state.failedCount > 0
+                ? `${state.failedCount} 项失败`
+                : state.pendingCount > 0
+                  ? `${state.pendingCount} 项处理中`
+                  : "全部完成"}
+            </strong>
           </div>
         </div>
       </section>
 
-      {state.error ? (
-        <div className="mt-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs leading-5 text-rose-200">
-          {state.error}
-        </div>
-      ) : null}
+      {visibleError ? <div className="error-banner"><TriangleAlert size={14} />{visibleError}</div> : null}
 
-      {state.failedCount > 0 ? (
-        <button
-          className="mt-3 w-full rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-100 hover:bg-rose-500/15"
-          disabled={loading}
-          onClick={() => void retry()}
-          type="button"
-        >
-          立即重试失败任务
-        </button>
-      ) : null}
-
-      <button
-        className="mt-4 w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-black hover:bg-orange-400"
-        onClick={() => void chrome.runtime.openOptionsPage()}
-        type="button"
-      >
-        GitHub 与同步设置
+      <button className="settings-row" onClick={() => void chrome.runtime.openOptionsPage()} type="button">
+        <span><Settings size={15} />GitHub 与同步设置</span>
+        <ExternalLink size={14} />
       </button>
     </main>
   );
