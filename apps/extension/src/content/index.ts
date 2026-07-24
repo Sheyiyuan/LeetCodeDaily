@@ -1,8 +1,8 @@
 import {
-  isAcceptedResultText,
-  submissionIdFromUrl,
+  isFreshAcceptedResultText,
   SUBMISSION_RESULT_SELECTOR,
   SUBMIT_BUTTON_SELECTOR,
+  submissionIdFromUrl,
   titleSlugFromPathname,
 } from "./detector";
 
@@ -12,6 +12,7 @@ let acceptedObservedAt: string | null = null;
 let submissionIdAtClick: string | null = null;
 let expiryTimer: number | null = null;
 let submissionIdGraceTimer: number | null = null;
+let resultBaselines = new WeakMap<Element, string>();
 
 const ALLOWED_PROXY_URLS = new Set([
   "https://leetcode.cn/graphql/",
@@ -20,8 +21,7 @@ const ALLOWED_PROXY_URLS = new Set([
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (
-    !message ||
-    message.type !== "leetcode-proxy-request" ||
+    message?.type !== "leetcode-proxy-request" ||
     typeof message.url !== "string" ||
     !ALLOWED_PROXY_URLS.has(message.url) ||
     (message.method !== "GET" && message.method !== "POST") ||
@@ -66,15 +66,11 @@ function submissionIdNear(element: Element): string | null {
   const currentSubmissionId = submissionIdFromUrl(location.href);
   if (currentSubmissionId) return currentSubmissionId;
 
-  const closestLink = element.closest<HTMLAnchorElement>(
-    'a[href*="/submissions/"]',
-  );
+  const closestLink = element.closest<HTMLAnchorElement>('a[href*="/submissions/"]');
   const scopedLink = element
     .closest("section, main, div")
     ?.querySelector<HTMLAnchorElement>('a[href*="/submissions/"]');
-  const globalLinks = document.querySelectorAll<HTMLAnchorElement>(
-    'a[href*="/submissions/"]',
-  );
+  const globalLinks = document.querySelectorAll<HTMLAnchorElement>('a[href*="/submissions/"]');
   const href =
     closestLink?.getAttribute("href") ??
     scopedLink?.getAttribute("href") ??
@@ -84,27 +80,19 @@ function submissionIdNear(element: Element): string | null {
 }
 
 function acceptedElementIn(node: Node): Element | null {
-  const element =
-    node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
   if (!element) return null;
 
-  let current: Element | null = element;
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    if (isAcceptedResultText(current.textContent)) return current;
-    current = current.parentElement;
-  }
-
-  const stableResult = element.matches(SUBMISSION_RESULT_SELECTOR)
+  const result = element.matches(SUBMISSION_RESULT_SELECTOR)
     ? element
-    : element.querySelector(SUBMISSION_RESULT_SELECTOR);
-  if (stableResult && isAcceptedResultText(stableResult.textContent)) {
-    return stableResult;
-  }
+    : (element.closest(SUBMISSION_RESULT_SELECTOR) ??
+      element.querySelector(SUBMISSION_RESULT_SELECTOR));
+  if (!result) return null;
 
-  for (const candidate of element.querySelectorAll("span, div")) {
-    if (isAcceptedResultText(candidate.textContent)) return candidate;
-  }
-  return null;
+  const currentText = result.textContent ?? "";
+  const isFresh = isFreshAcceptedResultText(currentText, resultBaselines.get(result));
+  resultBaselines.set(result, currentText);
+  return isFresh ? result : null;
 }
 
 function finishObservation(): void {
@@ -117,6 +105,7 @@ function finishObservation(): void {
   }
   expiryTimer = null;
   submissionIdGraceTimer = null;
+  resultBaselines = new WeakMap<Element, string>();
 }
 
 function emitAccepted(submissionId: string | null): void {
@@ -133,15 +122,26 @@ function emitAccepted(submissionId: string | null): void {
   const previousSubmissionId = submissionIdAtClick;
   finishObservation();
 
-  void chrome.runtime.sendMessage({
-    type: "accepted-observed",
-    payload: {
-      submissionId,
-      previousSubmissionId,
-      titleSlug,
-      observedAt,
-    },
+  console.info("[LeetCodeDaily] Accepted result observed", {
+    titleSlug,
+    hasSubmissionId: Boolean(submissionId),
   });
+  void chrome.runtime
+    .sendMessage({
+      type: "accepted-observed",
+      payload: {
+        submissionId,
+        previousSubmissionId,
+        titleSlug,
+        observedAt,
+      },
+    })
+    .catch((cause: unknown) => {
+      console.warn(
+        "[LeetCodeDaily] failed to send Accepted event",
+        cause instanceof Error ? cause.message : "unknown error",
+      );
+    });
 }
 
 function inspectMutationNode(node: Node, detectAcceptance = true): void {
@@ -150,10 +150,7 @@ function inspectMutationNode(node: Node, detectAcceptance = true): void {
   const acceptedElement = detectAcceptance ? acceptedElementIn(node) : null;
   if (acceptedElement && !acceptedObservedAt) {
     acceptedObservedAt = new Date().toISOString();
-    submissionIdGraceTimer = window.setTimeout(
-      () => emitAccepted(null),
-      1_500,
-    );
+    submissionIdGraceTimer = window.setTimeout(() => emitAccepted(null), 1_500);
   }
   if (!acceptedObservedAt) return;
 
@@ -173,9 +170,18 @@ document.addEventListener(
     }
 
     finishObservation();
+    resultBaselines = new WeakMap<Element, string>();
+    let existingResultCount = 0;
+    for (const result of document.querySelectorAll(SUBMISSION_RESULT_SELECTOR)) {
+      resultBaselines.set(result, result.textContent ?? "");
+      existingResultCount += 1;
+    }
     awaitingSubmission = true;
-    submissionIdAtClick =
-      submissionIdFromUrl(location.href) ?? firstSubmissionIdInDocument();
+    submissionIdAtClick = submissionIdFromUrl(location.href) ?? firstSubmissionIdInDocument();
+    console.info("[LeetCodeDaily] submit observed", {
+      titleSlug: currentTitleSlug(),
+      hadExistingResult: existingResultCount > 0,
+    });
     expiryTimer = window.setTimeout(finishObservation, 2 * 60 * 1_000);
   },
   true,
@@ -204,4 +210,8 @@ observer.observe(document.documentElement, {
   characterData: true,
   childList: true,
   subtree: true,
+});
+
+console.info("[LeetCodeDaily] content script ready", {
+  pathname: location.pathname,
 });

@@ -1,7 +1,5 @@
-export const SUBMIT_BUTTON_SELECTOR =
-  'button[data-e2e-locator="console-submit-button"]';
-export const SUBMISSION_RESULT_SELECTOR =
-  '[data-e2e-locator="submission-result"]';
+export const SUBMIT_BUTTON_SELECTOR = 'button[data-e2e-locator="console-submit-button"]';
+export const SUBMISSION_RESULT_SELECTOR = '[data-e2e-locator="submission-result"]';
 
 const SUBMISSION_PATH_PATTERNS = [
   /\/problems\/[^/]+\/submissions\/(\d+)\/?/,
@@ -34,4 +32,15 @@ export function submissionIdFromUrl(value: string): string | null {
 export function isAcceptedResultText(value: string | null | undefined): boolean {
   const normalized = value?.trim().replace(/\s+/g, " ").toLowerCase();
   return normalized === "通过" || normalized === "accepted";
+}
+
+/**
+ * An already-visible Accepted badge belongs to the previous submission until
+ * the result node changes state or is replaced by a new node.
+ */
+export function isFreshAcceptedResultText(
+  value: string | null | undefined,
+  baseline: string | null | undefined,
+): boolean {
+  return isAcceptedResultText(value) && !isAcceptedResultText(baseline);
 }
