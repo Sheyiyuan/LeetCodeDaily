@@ -75,6 +75,14 @@ export async function scheduleHistoryActivity(delayMs = 1_000): Promise<void> {
 }
 
 export async function runHistoryActivityBackfill(): Promise<void> {
+  const db = await database();
+  const existing = await db.get("historyActivity", JOB_ID);
+  if (
+    existing?.state === "completed" &&
+    Date.now() - Date.parse(existing.updatedAt) >= REFRESH_INTERVAL_MS
+  ) {
+    await ensureHistoryActivityBackfill(existing.username);
+  }
   activeRun ??= runBackfillChunk().finally(() => {
     activeRun = null;
   });
@@ -184,7 +192,7 @@ async function completeBackfill(): Promise<void> {
     updatedAt: new Date().toISOString(),
   });
   await publishActivity(true);
-  await chrome.alarms.clear(HISTORY_ACTIVITY_ALARM);
+  await scheduleHistoryActivity(REFRESH_INTERVAL_MS);
 }
 
 async function failBackfill(job: StoredHistoryActivityBackfill, message: string): Promise<void> {
