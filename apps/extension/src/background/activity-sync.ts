@@ -4,6 +4,17 @@ import { database } from "./database";
 import { readGitHubAuth, sessionToken } from "./auth";
 import { readSettings } from "./settings";
 
+const MAX_ACTIVITY_DAYS_PER_REQUEST = 400;
+
+export function chunkActivityDays<T>(days: T[]): T[][] {
+  if (days.length === 0) return [[]];
+  const chunks: T[][] = [];
+  for (let index = 0; index < days.length; index += MAX_ACTIVITY_DAYS_PER_REQUEST) {
+    chunks.push(days.slice(index, index + MAX_ACTIVITY_DAYS_PER_REQUEST));
+  }
+  return chunks;
+}
+
 async function authenticatedPut(
   path: string,
   body: unknown,
@@ -39,11 +50,13 @@ export async function syncActivityToCloud(): Promise<boolean> {
     acceptedSubmissionCount: day.acceptedSubmissionCount,
     distinctProblemCount: day.distinctProblemIds.length,
   }));
-  await authenticatedPut(
-    "/v1/activity/days",
-    { sourceVersion: 1, timezone: settings.timezone, days },
-    token,
-  );
+  for (const batch of chunkActivityDays(days)) {
+    await authenticatedPut(
+      "/v1/activity/days",
+      { sourceVersion: 1, timezone: settings.timezone, days: batch },
+      token,
+    );
+  }
   await authenticatedPut(
     "/v1/heatmap/settings",
     { publicEnabled: settings.heatmapPublicEnabled },
