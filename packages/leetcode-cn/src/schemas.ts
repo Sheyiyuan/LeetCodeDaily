@@ -90,11 +90,9 @@ export const submissionListDataSchema = z.object({
     submissions: z.array(
       z.object({
         id: z.string(),
-        titleSlug: z.string(),
         statusDisplay: z.string(),
         lang: z.string(),
         timestamp: z.number().int(),
-        frontendId: z.string(),
       }),
     ),
   }),

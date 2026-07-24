@@ -11,6 +11,7 @@ let awaitingSubmission = false;
 let acceptedObservedAt: string | null = null;
 let submissionIdAtClick: string | null = null;
 let expiryTimer: number | null = null;
+let submissionIdGraceTimer: number | null = null;
 
 const ALLOWED_PROXY_URLS = new Set([
   "https://leetcode.cn/graphql/",
@@ -111,7 +112,36 @@ function finishObservation(): void {
   acceptedObservedAt = null;
   submissionIdAtClick = null;
   if (expiryTimer !== null) window.clearTimeout(expiryTimer);
+  if (submissionIdGraceTimer !== null) {
+    window.clearTimeout(submissionIdGraceTimer);
+  }
   expiryTimer = null;
+  submissionIdGraceTimer = null;
+}
+
+function emitAccepted(submissionId: string | null): void {
+  if (!awaitingSubmission || !acceptedObservedAt) return;
+
+  const titleSlug = currentTitleSlug();
+  if (!titleSlug) return;
+  const fingerprint = submissionId
+    ? `${titleSlug}:${submissionId}`
+    : `${titleSlug}:${acceptedObservedAt}`;
+  if (fingerprint === lastFingerprint) return;
+  lastFingerprint = fingerprint;
+  const observedAt = acceptedObservedAt;
+  const previousSubmissionId = submissionIdAtClick;
+  finishObservation();
+
+  void chrome.runtime.sendMessage({
+    type: "accepted-observed",
+    payload: {
+      submissionId,
+      previousSubmissionId,
+      titleSlug,
+      observedAt,
+    },
+  });
 }
 
 function inspectMutationNode(node: Node, detectAcceptance = true): void {
@@ -120,6 +150,10 @@ function inspectMutationNode(node: Node, detectAcceptance = true): void {
   const acceptedElement = detectAcceptance ? acceptedElementIn(node) : null;
   if (acceptedElement && !acceptedObservedAt) {
     acceptedObservedAt = new Date().toISOString();
+    submissionIdGraceTimer = window.setTimeout(
+      () => emitAccepted(null),
+      1_500,
+    );
   }
   if (!acceptedObservedAt) return;
 
@@ -127,23 +161,7 @@ function inspectMutationNode(node: Node, detectAcceptance = true): void {
   const submissionId = submissionIdNear(contextElement);
   if (!submissionId || submissionId === submissionIdAtClick) return;
 
-  const titleSlug = currentTitleSlug();
-  if (!titleSlug) return;
-
-  const fingerprint = `${titleSlug}:${submissionId}`;
-  if (fingerprint === lastFingerprint) return;
-  lastFingerprint = fingerprint;
-  const observedAt = acceptedObservedAt;
-  finishObservation();
-
-  void chrome.runtime.sendMessage({
-    type: "accepted-observed",
-    payload: {
-      submissionId,
-      titleSlug,
-      observedAt,
-    },
-  });
+  emitAccepted(submissionId);
 }
 
 document.addEventListener(
@@ -154,11 +172,10 @@ document.addEventListener(
       return;
     }
 
+    finishObservation();
     awaitingSubmission = true;
-    acceptedObservedAt = null;
     submissionIdAtClick =
       submissionIdFromUrl(location.href) ?? firstSubmissionIdInDocument();
-    if (expiryTimer !== null) window.clearTimeout(expiryTimer);
     expiryTimer = window.setTimeout(finishObservation, 2 * 60 * 1_000);
   },
   true,

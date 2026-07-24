@@ -44,7 +44,10 @@ export type ExtensionMessage =
       type: "accepted-observed";
       payload: Pick<
         SubmissionCandidate,
-        "submissionId" | "titleSlug" | "observedAt"
+        | "submissionId"
+        | "previousSubmissionId"
+        | "titleSlug"
+        | "observedAt"
       >;
     }
   | { type: "dashboard-refresh" }

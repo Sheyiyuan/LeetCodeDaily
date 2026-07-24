@@ -174,14 +174,12 @@ describe("LeetCodeCnClient", () => {
         titleSlug: "two-sum",
         language: "python3",
         timestamp: 150,
-        frontendId: "1",
       },
       {
         id: "101",
         titleSlug: "two-sum",
         language: "typescript",
         timestamp: 200,
-        frontendId: "1",
       },
     ]);
     expect(requestCount).toBe(1);
@@ -221,5 +219,48 @@ describe("LeetCodeCnClient", () => {
     await expect(client.getAcceptedSubmissions("two-sum")).resolves.toHaveLength(
       2,
     );
+  });
+
+  it("reads only the first accepted page when resolving a live candidate", async () => {
+    let requestCount = 0;
+    let requestedLimit: unknown;
+    const client = new LeetCodeCnClient({
+      fetch: async (_input, init) => {
+        requestCount += 1;
+        const body = JSON.parse(String(init?.body)) as {
+          variables?: { limit?: unknown };
+        };
+        requestedLimit = body.variables?.limit;
+        return jsonResponse({
+          data: {
+            submissionList: {
+              lastKey: "next-page",
+              hasNext: true,
+              submissions: [
+                {
+                  id: "103",
+                  statusDisplay: "Accepted",
+                  lang: "typescript",
+                  timestamp: 300,
+                },
+              ],
+            },
+          },
+        });
+      },
+    });
+
+    await expect(
+      client.getRecentAcceptedSubmissions("two-sum", 100),
+    ).resolves.toEqual([
+      {
+        id: "103",
+        titleSlug: "two-sum",
+        language: "typescript",
+        timestamp: 300,
+      },
+    ]);
+    expect(requestCount).toBe(1);
+    expect(requestedLimit).toBe(20);
   });
 });

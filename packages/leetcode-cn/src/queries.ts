@@ -77,11 +77,9 @@ export const SUBMISSION_LIST_QUERY = /* GraphQL */ `
       hasNext
       submissions {
         id
-        titleSlug
         statusDisplay
         lang
         timestamp
-        frontendId
       }
     }
   }

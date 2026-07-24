@@ -58,6 +58,7 @@ export interface SubmissionCandidate {
   key: string;
   site: LeetCodeSite;
   submissionId: string | null;
+  previousSubmissionId?: string | null;
   titleSlug: string;
   observedAt: string;
   hydrationState: HydrationState;

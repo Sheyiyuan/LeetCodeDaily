@@ -40,7 +40,13 @@ export interface AcceptedSubmissionSummary {
   titleSlug: string;
   language: string;
   timestamp: number;
-  frontendId: string;
+}
+
+interface AcceptedSubmissionPage {
+  submissions: AcceptedSubmissionSummary[];
+  receivedCount: number;
+  hasNext: boolean;
+  lastKey: string | null;
 }
 
 export interface LeetCodeCnClientOptions {
@@ -224,35 +230,32 @@ export class LeetCodeCnClient {
     let hasNext = true;
 
     for (let page = 0; hasNext && page < 200; page += 1) {
-      const data: z.output<typeof submissionListDataSchema> = await this.request(
-        "submissionList",
-        SUBMISSION_LIST_QUERY,
-        {
-          offset,
-          limit: 20,
-          lastKey,
-          questionSlug: titleSlug,
-          status: "AC",
-        },
-        submissionListDataSchema,
+      const result = await this.getAcceptedSubmissionPage(
+        titleSlug,
+        offset,
+        20,
+        lastKey,
       );
-      const submissions = data.submissionList.submissions.map(
-        (submission) => ({
-          id: submission.id,
-          titleSlug: submission.titleSlug,
-          language: submission.lang,
-          timestamp: submission.timestamp,
-          frontendId: submission.frontendId,
-        }),
-      );
-      all.push(...submissions);
-      offset += data.submissionList.submissions.length;
-      lastKey = data.submissionList.lastKey;
-      hasNext = data.submissionList.hasNext;
-      if (hasNext && data.submissionList.submissions.length === 0) break;
+      all.push(...result.submissions);
+      offset += result.receivedCount;
+      lastKey = result.lastKey;
+      hasNext = result.hasNext;
+      if (hasNext && result.receivedCount === 0) break;
     }
 
     return all;
+  }
+
+  async getRecentAcceptedSubmissions(
+    titleSlug: string,
+    limit = 20,
+  ): Promise<AcceptedSubmissionSummary[]> {
+    const safeLimit = Number.isFinite(limit)
+      ? Math.min(Math.max(Math.trunc(limit), 1), 20)
+      : 20;
+    return (
+      await this.getAcceptedSubmissionPage(titleSlug, 0, safeLimit, null)
+    ).submissions;
   }
 
   async getLatestAcceptedByLanguage(
@@ -261,6 +264,39 @@ export class LeetCodeCnClient {
     return latestAcceptedByLanguage(
       await this.getAcceptedSubmissions(titleSlug),
     );
+  }
+
+  private async getAcceptedSubmissionPage(
+    titleSlug: string,
+    offset: number,
+    limit: number,
+    lastKey: string | null,
+  ): Promise<AcceptedSubmissionPage> {
+    const data: z.output<typeof submissionListDataSchema> = await this.request(
+      "submissionList",
+      SUBMISSION_LIST_QUERY,
+      {
+        offset,
+        limit,
+        lastKey,
+        questionSlug: titleSlug,
+        status: "AC",
+      },
+      submissionListDataSchema,
+    );
+    return {
+      submissions: data.submissionList.submissions
+        .filter((submission) => submission.statusDisplay === "Accepted")
+        .map((submission) => ({
+          id: submission.id,
+          titleSlug,
+          language: submission.lang,
+          timestamp: submission.timestamp,
+        })),
+      receivedCount: data.submissionList.submissions.length,
+      hasNext: data.submissionList.hasNext,
+      lastKey: data.submissionList.lastKey,
+    };
   }
 
   private async request<TSchema extends z.ZodType>(

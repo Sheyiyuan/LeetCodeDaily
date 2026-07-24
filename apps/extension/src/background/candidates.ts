@@ -2,9 +2,13 @@ import {
   candidateKey,
   LEETCODE_SITE,
   retryDelayMs,
+  submissionKey,
   type SubmissionCandidate,
 } from "@leetcode-daily/domain";
-import { LeetCodeApiError } from "@leetcode-daily/leetcode-cn";
+import {
+  LeetCodeApiError,
+  type AcceptedSubmissionSummary,
+} from "@leetcode-daily/leetcode-cn";
 
 import { setCompletedBadge, setFailureBadge } from "./badge";
 import { syncActivityToCloud } from "./activity-sync";
@@ -16,7 +20,10 @@ import { leetcodeClient } from "./leetcode";
 export async function observeAccepted(
   input: Pick<
     SubmissionCandidate,
-    "submissionId" | "titleSlug" | "observedAt"
+    | "submissionId"
+    | "previousSubmissionId"
+    | "titleSlug"
+    | "observedAt"
   >,
 ): Promise<void> {
   const db = await database();
@@ -25,6 +32,12 @@ export async function observeAccepted(
     input.observedAt,
     input.submissionId,
   );
+  if (
+    input.submissionId &&
+    (await db.get("submissions", submissionKey(input.submissionId)))
+  ) {
+    return;
+  }
   const existing = await db.get("candidates", key);
   if (existing?.hydrationState === "hydrated") return;
 
@@ -32,6 +45,9 @@ export async function observeAccepted(
     key,
     site: LEETCODE_SITE,
     submissionId: input.submissionId,
+    ...(input.previousSubmissionId !== undefined
+      ? { previousSubmissionId: input.previousSubmissionId }
+      : {}),
     titleSlug: input.titleSlug,
     observedAt: input.observedAt,
     hydrationState: "pending-hydration",
@@ -46,27 +62,35 @@ export async function observeAccepted(
 
 async function hydrateCandidate(key: string): Promise<void> {
   const db = await database();
-  const candidate = await db.get("candidates", key);
+  let candidate = await db.get("candidates", key);
   if (!candidate) return;
 
-  if (!candidate.submissionId) {
-    await db.put("candidates", {
-      ...candidate,
-      hydrationState: "retryable-failure",
-      attempts: candidate.attempts + 1,
-      lastError: "暂未获取到 submission ID，请稍后手动重试",
-      nextAttemptAt: new Date(
-        Date.now() + retryDelayMs(candidate.attempts + 1),
-      ).toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    await setFailureBadge();
-    return;
-  }
-
   try {
+    if (!candidate.submissionId) {
+      const recent = await leetcodeClient.getRecentAcceptedSubmissions(
+        candidate.titleSlug,
+      );
+      const knownSubmissionIds = new Set(
+        (await db.getAll("submissions")).map(
+          (submission) => submission.submissionId,
+        ),
+      );
+      const submissionId = recentSubmissionIdForCandidate(
+        recent,
+        candidate,
+        knownSubmissionIds,
+      );
+      if (!submissionId) {
+        throw new Error("最近提交列表中尚未出现本次 Accepted");
+      }
+      candidate = { ...candidate, submissionId };
+      await db.put("candidates", candidate);
+    }
+
+    const submissionId = candidate.submissionId;
+    if (!submissionId) throw new Error("未能解析 submission ID");
     const submission = await leetcodeClient.getSubmissionDetail(
-      candidate.submissionId,
+      submissionId,
     );
     const problem = await leetcodeClient.getQuestion(submission.titleSlug);
     await db.put("submissions", submission);
@@ -112,6 +136,39 @@ async function hydrateCandidate(key: string): Promise<void> {
     });
     await setFailureBadge();
   }
+}
+
+const CANDIDATE_LOOKBACK_MS = 5 * 60 * 1_000;
+const CANDIDATE_CLOCK_SKEW_MS = 60 * 1_000;
+
+export function recentSubmissionIdForCandidate(
+  submissions: AcceptedSubmissionSummary[],
+  candidate: Pick<
+    SubmissionCandidate,
+    "titleSlug" | "observedAt" | "previousSubmissionId"
+  >,
+  knownSubmissionIds: ReadonlySet<string> = new Set(),
+): string | null {
+  const observedAt = Date.parse(candidate.observedAt);
+  if (!Number.isFinite(observedAt)) return null;
+
+  return (
+    submissions
+      .filter((submission) => {
+        const submittedAt = submission.timestamp * 1_000;
+        return (
+          submission.titleSlug === candidate.titleSlug &&
+          submission.id !== candidate.previousSubmissionId &&
+          !knownSubmissionIds.has(submission.id) &&
+          submittedAt >= observedAt - CANDIDATE_LOOKBACK_MS &&
+          submittedAt <= observedAt + CANDIDATE_CLOCK_SKEW_MS
+        );
+      })
+      .sort(
+        (left, right) =>
+          right.timestamp - left.timestamp || right.id.localeCompare(left.id),
+      )[0]?.id ?? null
+  );
 }
 
 export async function retryCandidates(force = false): Promise<void> {
