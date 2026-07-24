@@ -239,6 +239,37 @@ describe("LeetCodeCnClient", () => {
     await expect(client.getAcceptedSubmissions("two-sum")).resolves.toHaveLength(2);
   });
 
+  it("accepts string timestamps returned by leetcode.cn", async () => {
+    const client = new LeetCodeCnClient({
+      fetch: async () =>
+        jsonResponse({
+          data: {
+            submissionList: {
+              lastKey: null,
+              hasNext: false,
+              submissions: [
+                {
+                  id: "102",
+                  statusDisplay: "Accepted",
+                  lang: "typescript",
+                  timestamp: "1774334534",
+                },
+              ],
+            },
+          },
+        }),
+    });
+
+    await expect(client.getAcceptedSubmissions("spiral-matrix")).resolves.toEqual([
+      {
+        id: "102",
+        titleSlug: "spiral-matrix",
+        language: "typescript",
+        timestamp: 1774334534,
+      },
+    ]);
+  });
+
   it("reads only the first accepted page when resolving a live candidate", async () => {
     let requestCount = 0;
     let requestedLimit: unknown;

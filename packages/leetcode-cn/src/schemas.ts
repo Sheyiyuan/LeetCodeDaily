@@ -93,7 +93,8 @@ export const submissionListDataSchema = z.object({
         id: z.string(),
         statusDisplay: z.string(),
         lang: z.string(),
-        timestamp: z.number().int(),
+        // LeetCode.cn currently serializes this Unix timestamp as a string.
+        timestamp: z.coerce.number().int(),
       }),
     ),
   }),
