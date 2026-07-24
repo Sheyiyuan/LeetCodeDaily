@@ -228,11 +228,13 @@ export async function retrySyncJobs(force = false): Promise<void> {
 const STALE_SYNCING_MS = 5 * 60 * 1_000;
 
 export function shouldRetrySyncJob(
-  job: Pick<StoredSyncJob, "state" | "updatedAt" | "nextAttemptAt">,
+  job: Pick<StoredSyncJob, "state" | "updatedAt" | "nextAttemptAt"> &
+    Partial<Pick<StoredSyncJob, "lastErrorMessage">>,
   now: string,
   force: boolean,
 ): boolean {
   if (job.state === "succeeded") return false;
+  if (isFailureFixedByCurrentVersion(job)) return true;
   if (job.state === "permanent-failure") return force;
   if (job.state === "syncing") {
     return (
@@ -240,4 +242,21 @@ export function shouldRetrySyncJob(
     );
   }
   return force || !job.nextAttemptAt || job.nextAttemptAt <= now;
+}
+
+export function isFailureFixedByCurrentVersion(
+  job: Pick<StoredSyncJob, "state"> &
+    Partial<Pick<StoredSyncJob, "lastErrorMessage">>,
+): boolean {
+  if (
+    job.state !== "retryable-failure" &&
+    job.state !== "permanent-failure"
+  ) {
+    return false;
+  }
+  const message = job.lastErrorMessage?.toLowerCase() ?? "";
+  return (
+    message.includes("illegal invocation") ||
+    message.includes("git repository is empty")
+  );
 }

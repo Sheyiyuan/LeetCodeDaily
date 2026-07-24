@@ -73,12 +73,15 @@ async function retryWork(force: boolean): Promise<void> {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void refreshDashboardAndBackfill();
+  void refreshDashboardAndBackfill()
+    .then(() => retryWork(false))
+    .catch(() => undefined);
   void chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 });
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 });
+  void retryWork(false);
   void readHistoryImport().then((status) => {
     if (status.state === "running") void runHistoryImport();
   });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { hasEquivalentSyncJob, isPermanentSyncInputError, shouldRetrySyncJob } from "./sync";
+import {
+  hasEquivalentSyncJob,
+  isFailureFixedByCurrentVersion,
+  isPermanentSyncInputError,
+  shouldRetrySyncJob,
+} from "./sync";
 
 describe("sync error classification", () => {
   it("keeps Worker fetch invocation errors retryable", () => {
@@ -110,6 +115,45 @@ describe("shouldRetrySyncJob", () => {
         now,
         false,
       ),
+    ).toBe(false);
+  });
+
+  it("immediately retries failures whose implementation bug is now fixed", () => {
+    expect(
+      shouldRetrySyncJob(
+        {
+          state: "permanent-failure",
+          updatedAt: now,
+          nextAttemptAt: null,
+          lastErrorMessage:
+            "Failed to execute 'fetch' on 'WorkerGlobalScope': Illegal invocation",
+        },
+        now,
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      shouldRetrySyncJob(
+        {
+          state: "retryable-failure",
+          updatedAt: now,
+          nextAttemptAt: "2026-07-25T10:00:00.000Z",
+          lastErrorMessage: "Git Repository is empty.",
+        },
+        now,
+        false,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("isFailureFixedByCurrentVersion", () => {
+  it("does not auto-retry unrelated permanent input errors", () => {
+    expect(
+      isFailureFixedByCurrentVersion({
+        state: "permanent-failure",
+        lastErrorMessage: "unsafe repository path: ../README.md",
+      }),
     ).toBe(false);
   });
 });
