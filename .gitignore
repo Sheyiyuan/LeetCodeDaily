@@ -9,4 +9,10 @@ coverage/
 .DS_Store
 *.log
 *.cpuprofile
-docs
+docs/*
+!docs/store/
+docs/store/*
+!docs/store/privacy-policy.md
+!docs/store/permissions.md
+!docs/store/data-deletion.md
+!docs/release-checklist.md
