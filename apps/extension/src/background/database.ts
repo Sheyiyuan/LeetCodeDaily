@@ -6,7 +6,7 @@ import type {
 } from "@leetcode-daily/domain";
 import type { CommitFile } from "@leetcode-daily/github-sync";
 import type { SolvedProblemSummary } from "@leetcode-daily/leetcode-cn";
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 
 export interface StoredSyncJob extends SyncJob {
   owner: string;
@@ -20,9 +20,13 @@ export interface StoredHistoryImport {
   problemSlugs: SolvedProblemSummary[];
   nextIndex: number;
   importedProblems: number;
+  /** Slugs whose files have been committed successfully. */
+  completedProblemSlugs?: string[] | undefined;
   failures: Array<{ titleSlug: string; message: string }>;
   pendingFiles: CommitFile[];
   pendingProblemCount: number;
+  /** Slugs represented by pendingFiles and not committed yet. */
+  pendingProblemSlugs?: string[] | undefined;
   owner: string;
   repository: string;
   branch: string;
@@ -160,8 +164,7 @@ export async function countCandidateStates(): Promise<{
   ]);
   return {
     pending: pending + retrying + syncPending,
-    failed:
-      failed + permanentCandidateFailures + syncFailed + permanentSyncFailures,
+    failed: failed + permanentCandidateFailures + syncFailed + permanentSyncFailures,
   };
 }
 

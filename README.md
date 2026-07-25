@@ -74,7 +74,7 @@ http://127.0.0.1:5173/preview.html?view=options
 
 1. 打开 `https://leetcode.cn/` 并登录力扣中国站，至少保留一个力扣页面打开。
 2. 点击扩展图标，打开“GitHub 与同步设置”，连接 GitHub。
-3. 在 GitHub App 安装设置中只授权要写入的仓库，并确认 `Contents` 权限为 `Read and write`。回到设置页刷新仓库列表，选择仓库和分支后保存。
+3. 首次连接时按 GitHub 页面确认 App 的仓库授权范围，并确保 `Contents` 为 `Read and write`。如果授权后只有一个可写仓库，扩展会自动选择它和默认分支；多个仓库时才需要在设置页明确选择目标。
 4. 在力扣题目页提交并通过。扩展会先校验官方 submission detail，再把 `README.md` 和对应语言题解作为一次原子 commit 写入目标仓库。
 5. 若要显示历史活动，保持力扣页面打开，扩展会在后台逐题回填。历史代码不会自动写入；在设置页确认目标仓库后点击“开始导入”。
 6. 在设置页开启“公开刷题热力图”，保存后复制 SVG 地址或 README `<picture>` 片段。公开开关默认关闭。
@@ -82,6 +82,10 @@ http://127.0.0.1:5173/preview.html?view=options
 如果仓库列表为空，请先在 GitHub 的 App 安装设置中批准目标仓库和新增权限，再回到扩展刷新列表。同步失败时 Popup 会显示原因并提供“重试”；无需重新提交题目。
 
 ## GitHub App 配置
+
+这里没有照搬 `leetcode-tracker` 的 GitHub OAuth App + `repo` 方案。那种方案把一个可访问用户全部仓库的令牌放在扩展侧，虽然少一步仓库安装授权，但令牌泄露后影响范围更大，也无法满足“只写入用户选定仓库”的最小权限边界。
+
+LeetCodeDaily 使用 GitHub App，只请求用户明确授权仓库的 `Contents: Read and write`。连接后如果 GitHub 返回的可写仓库只有一个，设置页会自动选择该仓库和默认分支并保存；只有多个仓库时才要求用户明确选择，避免插件把题解写错位置。
 
 GitHub App 需要：
 

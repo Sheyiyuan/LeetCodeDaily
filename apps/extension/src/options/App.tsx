@@ -71,6 +71,20 @@ function timezoneIsValid(value: string): boolean {
   }
 }
 
+export function autoSelectSingleRepository(
+  settings: ExtensionSettings,
+  repositories: GitHubRepositorySummary[],
+): ExtensionSettings | null {
+  if (settings.githubRepository || repositories.length !== 1) return null;
+  const repository = repositories[0];
+  if (!repository) return null;
+  return {
+    ...settings,
+    githubRepository: repository.fullName,
+    githubBranch: repository.defaultBranch || settings.githubBranch,
+  };
+}
+
 export function App() {
   const [settings, setSettings] = useState(FALLBACK);
   const [github, setGithub] = useState(EMPTY_GITHUB);
@@ -122,6 +136,9 @@ export function App() {
     };
   }, []);
 
+  // The loader intentionally runs only when the connection state changes;
+  // rerunning it for every settings edit would overwrite an in-progress choice.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadRepositories reads the initial connection settings by design.
   useEffect(() => {
     if (github.connected) void loadRepositories();
     else {
@@ -163,7 +180,18 @@ export function App() {
       if (!response.ok) throw new Error(response.error ?? "仓库列表读取失败");
       const nextRepositories = response.data ?? [];
       setRepositories(nextRepositories);
-      if (settings.githubRepository) {
+      const autoSettings = autoSelectSingleRepository(settings, nextRepositories);
+      if (autoSettings) {
+        const saveResponse = (await chrome.runtime.sendMessage({
+          type: "settings-write",
+          payload: autoSettings,
+        })) as MessageResponse<undefined>;
+        if (!saveResponse.ok) throw new Error(saveResponse.error ?? "仓库设置保存失败");
+        setSettings(autoSettings);
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 1_500);
+        await loadBranches(autoSettings.githubRepository as string);
+      } else if (settings.githubRepository) {
         await loadBranches(settings.githubRepository);
       }
     } catch (cause) {
@@ -263,9 +291,7 @@ export function App() {
     window.setTimeout(() => setEmbedCopied(false), 1_500);
   }
 
-  async function historyAction(
-    action: "start" | "pause" | "resume" | "cancel",
-  ): Promise<void> {
+  async function historyAction(action: "start" | "pause" | "resume" | "cancel"): Promise<void> {
     setHistoryBusy(true);
     setError(null);
     try {
@@ -285,16 +311,16 @@ export function App() {
 
   const historyProgress =
     historyImport.totalProblems > 0
-      ? Math.round(
-          (historyImport.processedProblems / historyImport.totalProblems) * 100,
-        )
+      ? Math.round((historyImport.processedProblems / historyImport.totalProblems) * 100)
       : 0;
 
   return (
     <main className="options-shell">
       <header className="options-header">
         <div className="options-brand">
-          <span className="brand-mark large"><Code2 size={20} /></span>
+          <span className="brand-mark large">
+            <Code2 size={20} />
+          </span>
           <span>
             <strong>LeetCodeDaily</strong>
             <small>leetcode.cn 自动同步</small>
@@ -316,7 +342,12 @@ export function App() {
         <h1>同步与账户</h1>
       </div>
 
-      {error ? <div className="error-banner wide"><TriangleAlert size={15} />{error}</div> : null}
+      {error ? (
+        <div className="error-banner wide">
+          <TriangleAlert size={15} />
+          {error}
+        </div>
+      ) : null}
 
       <section className="settings-section" aria-labelledby="github-section-heading">
         <div className="settings-section-heading">
@@ -335,7 +366,12 @@ export function App() {
               <strong>{github.connected ? `已连接 @${github.login}` : "尚未连接 GitHub"}</strong>
               <small>{github.connected ? "GitHub App 授权有效" : "连接后可同步题解仓库"}</small>
             </div>
-            <button className="secondary-button" disabled={authBusy} onClick={() => void toggleGitHub()} type="button">
+            <button
+              className="secondary-button"
+              disabled={authBusy}
+              onClick={() => void toggleGitHub()}
+              type="button"
+            >
               {authBusy ? "处理中" : github.connected ? "断开" : "连接 GitHub"}
             </button>
           </div>
@@ -352,12 +388,16 @@ export function App() {
                     value={settings.githubRepository ?? ""}
                   >
                     <option value="">选择已授权仓库</option>
-                    {settings.githubRepository && !repositories.some((repository) => repository.fullName === settings.githubRepository) ? (
+                    {settings.githubRepository &&
+                    !repositories.some(
+                      (repository) => repository.fullName === settings.githubRepository,
+                    ) ? (
                       <option value={settings.githubRepository}>{settings.githubRepository}</option>
                     ) : null}
                     {repositories.map((repository) => (
                       <option key={repository.fullName} value={repository.fullName}>
-                        {repository.fullName}{repository.private ? "（私有）" : ""}
+                        {repository.fullName}
+                        {repository.private ? "（私有）" : ""}
                       </option>
                     ))}
                   </select>
@@ -369,7 +409,9 @@ export function App() {
                   onClick={() => void loadRepositories()}
                   title="刷新仓库列表"
                   type="button"
-                ><RefreshCw className={repositoryBusy ? "spin" : ""} size={15} /></button>
+                >
+                  <RefreshCw className={repositoryBusy ? "spin" : ""} size={15} />
+                </button>
               </div>
             </label>
           </div>
@@ -380,17 +422,34 @@ export function App() {
                 <GitBranch size={15} />
                 <select
                   disabled={!settings.githubRepository || repositoryBusy}
-                  onChange={(event) => setSettings({ ...settings, githubBranch: event.target.value })}
+                  onChange={(event) =>
+                    setSettings({ ...settings, githubBranch: event.target.value })
+                  }
                   value={settings.githubBranch}
                 >
-                  {settings.githubBranch && !branches.includes(settings.githubBranch) ? <option value={settings.githubBranch}>{settings.githubBranch}</option> : null}
-                  {branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+                  {settings.githubBranch && !branches.includes(settings.githubBranch) ? (
+                    <option value={settings.githubBranch}>{settings.githubBranch}</option>
+                  ) : null}
+                  {branches.map((branch) => (
+                    <option key={branch} value={branch}>
+                      {branch}
+                    </option>
+                  ))}
                 </select>
               </div>
             </label>
             <label>
               <span>根目录</span>
-                <div className="input-with-icon"><Code2 size={15} /><input onChange={(event) => setSettings({ ...settings, githubRootDirectory: event.target.value })} placeholder="留空表示仓库根目录" value={settings.githubRootDirectory} /></div>
+              <div className="input-with-icon">
+                <Code2 size={15} />
+                <input
+                  onChange={(event) =>
+                    setSettings({ ...settings, githubRootDirectory: event.target.value })
+                  }
+                  placeholder="留空表示仓库根目录"
+                  value={settings.githubRootDirectory}
+                />
+              </div>
             </label>
           </div>
         </div>
@@ -407,7 +466,11 @@ export function App() {
         <div className="settings-content">
           <label className="full-field">
             <span>统计时区</span>
-            <input onChange={(event) => setSettings({ ...settings, timezone: event.target.value })} spellCheck={false} value={settings.timezone} />
+            <input
+              onChange={(event) => setSettings({ ...settings, timezone: event.target.value })}
+              spellCheck={false}
+              value={settings.timezone}
+            />
           </label>
 
           <div className="toggle-row">
@@ -419,22 +482,47 @@ export function App() {
               aria-checked={settings.heatmapPublicEnabled}
               aria-label="公开刷题热力图"
               className={`switch ${settings.heatmapPublicEnabled ? "on" : ""}`}
-              onClick={() => setSettings({ ...settings, heatmapPublicEnabled: !settings.heatmapPublicEnabled })}
+              onClick={() =>
+                setSettings({ ...settings, heatmapPublicEnabled: !settings.heatmapPublicEnabled })
+              }
               role="switch"
               type="button"
-            ><span /></button>
+            >
+              <span />
+            </button>
           </div>
 
           {github.heatmapUrl ? (
             <div className="url-row">
               <code>{github.heatmapUrl}</code>
-              <button aria-label="复制热力图地址" className="icon-button" onClick={() => void copyHeatmapUrl()} title="复制 SVG 地址" type="button">
+              <button
+                aria-label="复制热力图地址"
+                className="icon-button"
+                onClick={() => void copyHeatmapUrl()}
+                title="复制 SVG 地址"
+                type="button"
+              >
                 {copied ? <Check size={15} /> : <Clipboard size={15} />}
               </button>
-              <button aria-label="复制 README 嵌入代码" className="icon-button" onClick={() => void copyHeatmapEmbed()} title="复制 README 嵌入代码" type="button">
+              <button
+                aria-label="复制 README 嵌入代码"
+                className="icon-button"
+                onClick={() => void copyHeatmapEmbed()}
+                title="复制 README 嵌入代码"
+                type="button"
+              >
                 {embedCopied ? <Check size={15} /> : <FileCode2 size={15} />}
               </button>
-              <a aria-label="打开热力图" className="icon-button" href={github.heatmapUrl} rel="noreferrer" target="_blank" title="打开热力图"><ExternalLink size={15} /></a>
+              <a
+                aria-label="打开热力图"
+                className="icon-button"
+                href={github.heatmapUrl}
+                rel="noreferrer"
+                target="_blank"
+                title="打开热力图"
+              >
+                <ExternalLink size={15} />
+              </a>
             </div>
           ) : null}
         </div>
@@ -458,24 +546,38 @@ export function App() {
               </strong>
               <span>{historyProgress}%</span>
             </div>
-            <div className="progress-track" aria-label={`历史导入进度 ${historyProgress}%`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={historyProgress}>
+            <div
+              className="progress-track"
+              aria-label={`历史导入进度 ${historyProgress}%`}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={historyProgress}
+            >
               <span style={{ width: `${historyProgress}%` }} />
             </div>
             <div className="import-meta">
               <span>已写入 {historyImport.importedProblems}</span>
               <span>失败 {historyImport.failedProblems}</span>
-              {historyImport.currentTitleSlug ? <code>{historyImport.currentTitleSlug}</code> : null}
+              {historyImport.currentTitleSlug ? (
+                <code>{historyImport.currentTitleSlug}</code>
+              ) : null}
             </div>
           </div>
 
-          {historyImport.lastError ? <div className="inline-warning"><TriangleAlert size={13} />{historyImport.lastError}</div> : null}
+          {historyImport.lastError ? (
+            <div className="inline-warning">
+              <TriangleAlert size={13} />
+              {historyImport.lastError}
+            </div>
+          ) : null}
 
           {historyImport.failures.length > 0 ? (
             <details className="import-failures">
               <summary>查看 {historyImport.failures.length} 道失败题目</summary>
               <ul>
-                {historyImport.failures.map((failure, index) => (
-                  <li key={`${failure.titleSlug}-${index}`}>
+                {historyImport.failures.map((failure) => (
+                  <li key={`${failure.titleSlug}-${failure.message}`}>
                     <code>{failure.titleSlug}</code>
                     <span>{failure.message}</span>
                   </li>
@@ -486,14 +588,48 @@ export function App() {
 
           <div className="import-actions">
             {historyImport.state === "running" ? (
-              <button className="secondary-button" disabled={historyBusy} onClick={() => void historyAction("pause")} type="button"><Pause size={14} />暂停</button>
+              <button
+                className="secondary-button"
+                disabled={historyBusy}
+                onClick={() => void historyAction("pause")}
+                type="button"
+              >
+                <Pause size={14} />
+                暂停
+              </button>
             ) : historyImport.state === "paused" || historyImport.state === "failed" ? (
-              <button className="primary-button compact" disabled={historyBusy} onClick={() => void historyAction("resume")} type="button"><Play size={14} />继续</button>
+              <button
+                className="primary-button compact"
+                disabled={historyBusy}
+                onClick={() => void historyAction("resume")}
+                type="button"
+              >
+                <Play size={14} />
+                继续
+              </button>
             ) : (
-              <button className="primary-button compact" disabled={historyBusy || !github.connected || !settings.githubRepository} onClick={() => void historyAction("start")} type="button"><Play size={14} />{historyImport.state === "completed" ? "重新导入" : "开始导入"}</button>
+              <button
+                className="primary-button compact"
+                disabled={historyBusy || !github.connected || !settings.githubRepository}
+                onClick={() => void historyAction("start")}
+                type="button"
+              >
+                <Play size={14} />
+                {historyImport.state === "completed" ? "重新导入" : "开始导入"}
+              </button>
             )}
-            {historyImport.state === "running" || historyImport.state === "paused" || historyImport.state === "failed" ? (
-              <button className="small-command" disabled={historyBusy} onClick={() => void historyAction("cancel")} type="button"><X size={13} />取消</button>
+            {historyImport.state === "running" ||
+            historyImport.state === "paused" ||
+            historyImport.state === "failed" ? (
+              <button
+                className="small-command"
+                disabled={historyBusy}
+                onClick={() => void historyAction("cancel")}
+                type="button"
+              >
+                <X size={13} />
+                取消
+              </button>
             ) : null}
           </div>
         </div>
@@ -503,19 +639,36 @@ export function App() {
         <section className="settings-section danger-section" aria-labelledby="data-section-heading">
           <div className="settings-section-heading">
             <Trash2 size={18} />
-            <div><h2 id="data-section-heading">账户数据</h2><p>永久删除云端活动与本地记录</p></div>
+            <div>
+              <h2 id="data-section-heading">账户数据</h2>
+              <p>永久删除云端活动与本地记录</p>
+            </div>
           </div>
           <div className="settings-content danger-content">
             <span>此操作无法撤销</span>
-            <button className="danger-button" disabled={authBusy} onClick={() => void deleteAccount()} type="button"><Trash2 size={14} />删除账户数据</button>
+            <button
+              className="danger-button"
+              disabled={authBusy}
+              onClick={() => void deleteAccount()}
+              type="button"
+            >
+              <Trash2 size={14} />
+              删除账户数据
+            </button>
           </div>
         </section>
       ) : null}
 
       <footer className="save-bar">
         <span>{validationError ?? (saved ? "设置已保存" : "")}</span>
-        <button className="primary-button" disabled={loading || Boolean(validationError)} onClick={() => void save()} type="button">
-          {saved ? <Check size={16} /> : <Save size={16} />}{saved ? "已保存" : "保存设置"}
+        <button
+          className="primary-button"
+          disabled={loading || Boolean(validationError)}
+          onClick={() => void save()}
+          type="button"
+        >
+          {saved ? <Check size={16} /> : <Save size={16} />}
+          {saved ? "已保存" : "保存设置"}
         </button>
       </footer>
     </main>

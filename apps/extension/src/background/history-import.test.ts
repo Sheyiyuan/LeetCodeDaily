@@ -52,4 +52,39 @@ describe("historyImportStatus", () => {
       currentTitleSlug: "add-two-numbers",
     });
   });
+
+  it("counts persisted successes and failures so resume can skip successes", () => {
+    expect(
+      historyImportStatus({
+        id: "history-import",
+        state: "failed",
+        problemSlugs: [
+          { questionId: "1", frontendId: "1", titleSlug: "two-sum" },
+          { questionId: "2", frontendId: "2", titleSlug: "add-two-numbers" },
+          { questionId: "3", frontendId: "3", titleSlug: "longest-substring" },
+        ],
+        nextIndex: 0,
+        importedProblems: 1,
+        completedProblemSlugs: ["two-sum"],
+        failures: [{ titleSlug: "add-two-numbers", message: "🐸☕超出访问限制，请稍后再试" }],
+        pendingFiles: [],
+        pendingProblemCount: 0,
+        pendingProblemSlugs: [],
+        owner: "octocat",
+        repository: "solutions",
+        branch: "main",
+        rootDirectory: "solutions",
+        currentTitleSlug: null,
+        lastError: "🐸☕超出访问限制，请稍后再试",
+        nextAttemptAt: null,
+        startedAt: "2026-07-24T00:00:00.000Z",
+        updatedAt: "2026-07-24T00:01:00.000Z",
+      }),
+    ).toMatchObject({
+      state: "failed",
+      processedProblems: 2,
+      importedProblems: 1,
+      failedProblems: 1,
+    });
+  });
 });

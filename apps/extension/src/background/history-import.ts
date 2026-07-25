@@ -1,20 +1,14 @@
 import {
+  type CommitFile,
   GitHubAtomicCommitClient,
   GitHubSyncError,
-  type CommitFile,
 } from "@leetcode-daily/github-sync";
-import {
-  generateProblemReadme,
-  generateSolutionFile,
-} from "@leetcode-daily/problem-markdown";
-import {
-  latestAcceptedByLanguage,
-  LeetCodeApiError,
-} from "@leetcode-daily/leetcode-cn";
+import { LeetCodeApiError, latestAcceptedByLanguage } from "@leetcode-daily/leetcode-cn";
+import { generateProblemReadme, generateSolutionFile } from "@leetcode-daily/problem-markdown";
 
 import type { HistoryImportStatus } from "../shared/messages";
-import { syncActivityToCloud } from "./activity-sync";
 import { rebuildDailyActivity } from "./activity-ledger";
+import { syncActivityToCloud } from "./activity-sync";
 import { githubAccessToken } from "./auth";
 import { setFailureBadge } from "./badge";
 import { database, type StoredHistoryImport } from "./database";
@@ -28,9 +22,23 @@ const BATCH_SIZE = 20;
 const PROBLEMS_PER_WAKE = 2;
 let activeRun: Promise<void> | null = null;
 
-export function historyImportStatus(
-  job: StoredHistoryImport | undefined,
-): HistoryImportStatus {
+function getCompletedProblemSlugs(job: StoredHistoryImport): string[] {
+  if (job.completedProblemSlugs) return job.completedProblemSlugs;
+  const failed = new Set(job.failures.map((failure) => failure.titleSlug));
+  return job.problemSlugs
+    .slice(0, job.nextIndex)
+    .map((problem) => problem.titleSlug)
+    .filter((titleSlug) => !failed.has(titleSlug));
+}
+
+function isRateLimitError(cause: unknown, message: string): boolean {
+  return (
+    cause instanceof LeetCodeApiError &&
+    /超出访问限制|请求过于频繁|rate limit|too many requests|\b429\b/i.test(message)
+  );
+}
+
+export function historyImportStatus(job: StoredHistoryImport | undefined): HistoryImportStatus {
   if (!job) {
     return {
       state: "idle",
@@ -45,10 +53,17 @@ export function historyImportStatus(
       updatedAt: null,
     };
   }
+  const completedProblemSlugs = getCompletedProblemSlugs(job);
+  const pendingProblemSlugs = job.pendingProblemSlugs ?? [];
+  const processedProblems = new Set([
+    ...completedProblemSlugs,
+    ...pendingProblemSlugs,
+    ...job.failures.map((failure) => failure.titleSlug),
+  ]).size;
   return {
     state: job.state,
     totalProblems: job.problemSlugs.length,
-    processedProblems: job.nextIndex,
+    processedProblems: Math.max(job.nextIndex, processedProblems),
     importedProblems: job.importedProblems,
     failedProblems: job.failures.length,
     failures: job.failures,
@@ -60,9 +75,7 @@ export function historyImportStatus(
 }
 
 export async function readHistoryImport(): Promise<HistoryImportStatus> {
-  return historyImportStatus(
-    await (await database()).get("historyImport", IMPORT_ID),
-  );
+  return historyImportStatus(await (await database()).get("historyImport", IMPORT_ID));
 }
 
 export async function startHistoryImport(): Promise<HistoryImportStatus> {
@@ -88,9 +101,11 @@ export async function startHistoryImport(): Promise<HistoryImportStatus> {
     problemSlugs: problems,
     nextIndex: 0,
     importedProblems: 0,
+    completedProblemSlugs: [],
     failures: [],
     pendingFiles: [],
     pendingProblemCount: 0,
+    pendingProblemSlugs: [],
     owner,
     repository,
     branch: settings.githubBranch,
@@ -133,18 +148,21 @@ export async function cancelHistoryImport(): Promise<HistoryImportStatus> {
   return historyImportStatus(updated);
 }
 
-async function updateState(
-  state: "running" | "paused",
-): Promise<HistoryImportStatus> {
+async function updateState(state: "running" | "paused"): Promise<HistoryImportStatus> {
   const db = await database();
   const job = await db.get("historyImport", IMPORT_ID);
   if (!job) throw new Error("没有可继续的历史导入任务");
   if (job.state === "completed" || job.state === "cancelled") {
     throw new Error("当前历史导入任务已经结束");
   }
+  const resumingFailedJob = state === "running" && job.state === "failed";
   const updated = {
     ...job,
     state,
+    nextIndex: resumingFailedJob ? 0 : job.nextIndex,
+    completedProblemSlugs: resumingFailedJob
+      ? getCompletedProblemSlugs(job)
+      : job.completedProblemSlugs,
     lastError: state === "running" ? null : job.lastError,
     nextAttemptAt: state === "running" ? null : job.nextAttemptAt,
     updatedAt: new Date().toISOString(),
@@ -169,18 +187,16 @@ export async function runHistoryImport(): Promise<void> {
 
 async function runHistoryImportChunk(): Promise<void> {
   const initial = await (await database()).get("historyImport", IMPORT_ID);
-  if (!initial || initial.state !== "running") return;
+  if (initial?.state !== "running") return;
   // Keep a recovery alarm alive if the service worker is stopped mid-request.
   await scheduleHistoryImport(60_000);
 
   for (let count = 0; count < PROBLEMS_PER_WAKE; count += 1) {
     const db = await database();
     const job = await db.get("historyImport", IMPORT_ID);
-    if (!job || job.state !== "running") return;
+    if (job?.state !== "running") return;
     if (job.nextAttemptAt && job.nextAttemptAt > new Date().toISOString()) {
-      await scheduleHistoryImport(
-        Math.max(1_000, Date.parse(job.nextAttemptAt) - Date.now()),
-      );
+      await scheduleHistoryImport(Math.max(1_000, Date.parse(job.nextAttemptAt) - Date.now()));
       return;
     }
 
@@ -200,6 +216,24 @@ async function runHistoryImportChunk(): Promise<void> {
 async function processProblem(job: StoredHistoryImport): Promise<void> {
   const problemSummary = job.problemSlugs[job.nextIndex];
   if (!problemSummary) return;
+  const completedProblemSlugs = getCompletedProblemSlugs(job);
+  const pendingProblemSlugs = job.pendingProblemSlugs ?? [];
+  if (
+    completedProblemSlugs.includes(problemSummary.titleSlug) ||
+    pendingProblemSlugs.includes(problemSummary.titleSlug)
+  ) {
+    const db = await database();
+    const current = await db.get("historyImport", IMPORT_ID);
+    if (current && current.state !== "cancelled") {
+      await db.put("historyImport", {
+        ...current,
+        nextIndex: current.nextIndex + 1,
+        currentTitleSlug: null,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return;
+  }
   const db = await database();
   await db.put("historyImport", {
     ...job,
@@ -208,17 +242,12 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
   });
 
   try {
-    const acceptedSummaries = await leetcodeClient.getAcceptedSubmissions(
-      problemSummary.titleSlug,
-    );
+    const acceptedSummaries = await leetcodeClient.getAcceptedSubmissions(problemSummary.titleSlug);
     const summaries = latestAcceptedByLanguage(acceptedSummaries);
     if (summaries.length === 0) throw new Error("未找到 Accepted 提交");
     const statusBeforeDetails = await db.get("historyImport", IMPORT_ID);
     if (!statusBeforeDetails || statusBeforeDetails.state === "cancelled") return;
-    const historicalTransaction = db.transaction(
-      "historicalAccepted",
-      "readwrite",
-    );
+    const historicalTransaction = db.transaction("historicalAccepted", "readwrite");
     for (const summary of acceptedSummaries) {
       await historicalTransaction.store.put({
         submissionId: summary.id,
@@ -230,11 +259,7 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
 
     const [problem, submissions] = await Promise.all([
       leetcodeClient.getQuestion(problemSummary.titleSlug),
-      Promise.all(
-        summaries.map((submission) =>
-          leetcodeClient.getSubmissionDetail(submission.id),
-        ),
-      ),
+      Promise.all(summaries.map((submission) => leetcodeClient.getSubmissionDetail(submission.id))),
     ]);
     const directory = joinRepositoryPath(
       job.rootDirectory,
@@ -266,6 +291,9 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
 
     const current = await db.get("historyImport", IMPORT_ID);
     if (!current || current.state === "cancelled") return;
+    const remainingFailures = current.failures.filter(
+      (failure) => failure.titleSlug !== problemSummary.titleSlug,
+    );
     const transaction = db.transaction("submissions", "readwrite");
     for (const submission of submissions) {
       await transaction.store.put(submission);
@@ -274,18 +302,18 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
     const updated: StoredHistoryImport = {
       ...current,
       nextIndex: current.nextIndex + 1,
+      completedProblemSlugs: getCompletedProblemSlugs(current),
       pendingFiles: [...current.pendingFiles, ...files],
       pendingProblemCount: current.pendingProblemCount + 1,
+      pendingProblemSlugs: [...(current.pendingProblemSlugs ?? []), problemSummary.titleSlug],
+      failures: remainingFailures,
       currentTitleSlug: null,
-      lastError: null,
+      lastError: remainingFailures.at(-1)?.message ?? null,
       nextAttemptAt: null,
       updatedAt: new Date().toISOString(),
     };
     await db.put("historyImport", updated);
-    if (
-      updated.state === "running" &&
-      updated.pendingProblemCount >= BATCH_SIZE
-    ) {
+    if (updated.state === "running" && updated.pendingProblemCount >= BATCH_SIZE) {
       await commitPendingBatch(updated);
     }
   } catch (cause) {
@@ -296,17 +324,23 @@ async function processProblem(job: StoredHistoryImport): Promise<void> {
       await failImport(message);
       return;
     }
-    await db.put("historyImport", {
+    const updated: StoredHistoryImport = {
       ...current,
       nextIndex: current.nextIndex + 1,
       failures: [
-        ...current.failures,
+        ...current.failures.filter((failure) => failure.titleSlug !== problemSummary.titleSlug),
         { titleSlug: problemSummary.titleSlug, message },
       ],
       currentTitleSlug: null,
       lastError: message,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    await db.put("historyImport", updated);
+    // LeetCode rate limiting is a task-level failure. Stop immediately so the
+    // persisted cursor and per-problem state can be resumed after the cooldown.
+    if (isRateLimitError(cause, message)) {
+      await failImport(message);
+    }
   }
 }
 
@@ -332,9 +366,13 @@ async function commitPendingBatch(job: StoredHistoryImport): Promise<void> {
     const updated: StoredHistoryImport = {
       ...current,
       importedProblems: current.importedProblems + current.pendingProblemCount,
+      completedProblemSlugs: [
+        ...new Set([...getCompletedProblemSlugs(current), ...(current.pendingProblemSlugs ?? [])]),
+      ],
       pendingFiles: [],
       pendingProblemCount: 0,
-      lastError: null,
+      pendingProblemSlugs: [],
+      lastError: current.failures.at(-1)?.message ?? null,
       nextAttemptAt: null,
       updatedAt: new Date().toISOString(),
     };
@@ -344,8 +382,7 @@ async function commitPendingBatch(job: StoredHistoryImport): Promise<void> {
       await completeImport();
     }
   } catch (cause) {
-    const retryable =
-      cause instanceof GitHubSyncError ? cause.retryable : true;
+    const retryable = cause instanceof GitHubSyncError ? cause.retryable : true;
     const message = cause instanceof Error ? cause.message : "GitHub 历史导入失败";
     if (retryable) {
       const db = await database();
@@ -376,9 +413,10 @@ async function completeImport(): Promise<void> {
   const db = await database();
   const current = await db.get("historyImport", IMPORT_ID);
   if (!current || current.state === "cancelled") return;
+  const hasFailures = current.failures.length > 0;
   await db.put("historyImport", {
     ...current,
-    state: "completed",
+    state: hasFailures ? "failed" : "completed",
     currentTitleSlug: null,
     lastError: current.failures.length > 0 ? current.lastError : null,
     nextAttemptAt: null,
