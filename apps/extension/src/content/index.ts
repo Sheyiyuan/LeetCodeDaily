@@ -1,6 +1,8 @@
 import {
-  isFreshAcceptedResultText,
+  isFreshAcceptedResult,
+  isAcceptedResultText,
   SUBMISSION_RESULT_SELECTOR,
+  SUBMISSION_LINK_SELECTOR,
   SUBMIT_BUTTON_SELECTOR,
   submissionIdFromUrl,
   titleSlugFromPathname,
@@ -12,7 +14,13 @@ let acceptedObservedAt: string | null = null;
 let submissionIdAtClick: string | null = null;
 let expiryTimer: number | null = null;
 let submissionIdGraceTimer: number | null = null;
-let resultBaselines = new WeakMap<Element, string>();
+let submissionProbeTimer: number | null = null;
+interface ResultBaseline {
+  text: string;
+  submissionId: string | null;
+}
+
+let resultBaselines = new WeakMap<Element, ResultBaseline>();
 
 const ALLOWED_PROXY_URLS = new Set([
   "https://leetcode.cn/graphql/",
@@ -57,7 +65,7 @@ function currentTitleSlug(): string | null {
 
 function firstSubmissionIdInDocument(): string | null {
   const href = document
-    .querySelector<HTMLAnchorElement>('a[href*="/submissions/"]')
+    .querySelector<HTMLAnchorElement>(SUBMISSION_LINK_SELECTOR)
     ?.getAttribute("href");
   return href ? submissionIdFromUrl(href) : null;
 }
@@ -66,11 +74,11 @@ function submissionIdNear(element: Element): string | null {
   const currentSubmissionId = submissionIdFromUrl(location.href);
   if (currentSubmissionId) return currentSubmissionId;
 
-  const closestLink = element.closest<HTMLAnchorElement>('a[href*="/submissions/"]');
+  const closestLink = element.closest<HTMLAnchorElement>(SUBMISSION_LINK_SELECTOR);
   const scopedLink = element
     .closest("section, main, div")
-    ?.querySelector<HTMLAnchorElement>('a[href*="/submissions/"]');
-  const globalLinks = document.querySelectorAll<HTMLAnchorElement>('a[href*="/submissions/"]');
+    ?.querySelector<HTMLAnchorElement>(SUBMISSION_LINK_SELECTOR);
+  const globalLinks = document.querySelectorAll<HTMLAnchorElement>(SUBMISSION_LINK_SELECTOR);
   const href =
     closestLink?.getAttribute("href") ??
     scopedLink?.getAttribute("href") ??
@@ -90,8 +98,18 @@ function acceptedElementIn(node: Node): Element | null {
   if (!result) return null;
 
   const currentText = result.textContent ?? "";
-  const isFresh = isFreshAcceptedResultText(currentText, resultBaselines.get(result));
-  resultBaselines.set(result, currentText);
+  const currentSubmissionId = submissionIdNear(result);
+  const baseline = resultBaselines.get(result);
+  const isFresh = isFreshAcceptedResult(
+    currentText,
+    baseline?.text,
+    currentSubmissionId,
+    baseline?.submissionId,
+  );
+  resultBaselines.set(result, {
+    text: currentText,
+    submissionId: currentSubmissionId,
+  });
   return isFresh ? result : null;
 }
 
@@ -103,9 +121,20 @@ function finishObservation(): void {
   if (submissionIdGraceTimer !== null) {
     window.clearTimeout(submissionIdGraceTimer);
   }
+  if (submissionProbeTimer !== null) window.clearTimeout(submissionProbeTimer);
   expiryTimer = null;
   submissionIdGraceTimer = null;
-  resultBaselines = new WeakMap<Element, string>();
+  submissionProbeTimer = null;
+  resultBaselines = new WeakMap<Element, ResultBaseline>();
+}
+
+function probeAcceptedResult(): void {
+  if (!awaitingSubmission || acceptedObservedAt) return;
+  const result = document.querySelector(SUBMISSION_RESULT_SELECTOR);
+  if (!result || !isAcceptedResultText(result.textContent)) return;
+
+  acceptedObservedAt = new Date().toISOString();
+  emitAccepted(null);
 }
 
 function emitAccepted(submissionId: string | null): void {
@@ -170,10 +199,13 @@ document.addEventListener(
     }
 
     finishObservation();
-    resultBaselines = new WeakMap<Element, string>();
+    resultBaselines = new WeakMap<Element, ResultBaseline>();
     let existingResultCount = 0;
     for (const result of document.querySelectorAll(SUBMISSION_RESULT_SELECTOR)) {
-      resultBaselines.set(result, result.textContent ?? "");
+      resultBaselines.set(result, {
+        text: result.textContent ?? "",
+        submissionId: submissionIdNear(result),
+      });
       existingResultCount += 1;
     }
     awaitingSubmission = true;
@@ -182,6 +214,7 @@ document.addEventListener(
       titleSlug: currentTitleSlug(),
       hadExistingResult: existingResultCount > 0,
     });
+    submissionProbeTimer = window.setTimeout(probeAcceptedResult, 2_000);
     expiryTimer = window.setTimeout(finishObservation, 2 * 60 * 1_000);
   },
   true,
@@ -192,15 +225,24 @@ const observer = new MutationObserver((mutations) => {
     if (acceptedObservedAt) inspectMutationNode(mutation.target, false);
     if (mutation.type === "characterData") {
       inspectMutationNode(mutation.target);
-    } else if (
-      mutation.type === "attributes" &&
-      mutation.target instanceof Element &&
-      mutation.target.matches(SUBMISSION_RESULT_SELECTOR)
-    ) {
-      inspectMutationNode(mutation.target);
+    } else if (mutation.type === "attributes" && mutation.target instanceof Element) {
+      if (mutation.target.matches(SUBMISSION_RESULT_SELECTOR)) {
+        inspectMutationNode(mutation.target);
+      } else if (
+        mutation.attributeName === "href" &&
+        mutation.target.matches(SUBMISSION_LINK_SELECTOR)
+      ) {
+        inspectMutationNode(mutation.target);
+      }
     }
     for (const node of mutation.addedNodes) {
       inspectMutationNode(node);
+      if (
+        node instanceof Element &&
+        (node.matches(SUBMISSION_LINK_SELECTOR) || node.querySelector(SUBMISSION_LINK_SELECTOR))
+      ) {
+        inspectMutationNode(node);
+      }
     }
   }
 });

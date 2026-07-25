@@ -4,6 +4,7 @@ import { countCandidateStates, database } from "./database";
 import { displayStoredSyncFailure } from "./github-errors";
 import { leetcodeClient } from "./leetcode";
 import { readSettings } from "./settings";
+import { calculateCurrentStreak } from "./streak";
 
 let account: AccountStatus | null = null;
 let stats: SolvedStats | null = null;
@@ -99,6 +100,7 @@ export async function readDashboard(): Promise<DashboardState> {
     acceptedSubmissionCount: day.acceptedSubmissionCount,
     distinctProblemCount: day.distinctProblemIds.length,
   }));
+  const todayLocalDate = localDateForInstant(new Date(), settings.timezone);
   const historyActivity = await db.get("historyActivity", "history-activity");
   const historyError =
     historyActivity?.state === "failed" ? historyActivity.lastError?.trim() : null;
@@ -106,7 +108,8 @@ export async function readDashboard(): Promise<DashboardState> {
     account,
     stats,
     activityDays,
-    todayLocalDate: localDateForInstant(new Date(), settings.timezone),
+    todayLocalDate,
+    streakDays: calculateCurrentStreak(dailyActivity, todayLocalDate),
     pendingCount: counts.pending + (historyActivity?.state === "running" ? 1 : 0),
     failedCount: counts.failed,
     lastSuccessfulRefreshAt,

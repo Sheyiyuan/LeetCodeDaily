@@ -74,6 +74,7 @@ export interface DashboardState {
   stats: SolvedStats | null;
   activityDays: ActivityDaySummary[];
   todayLocalDate: string;
+  streakDays: number;
   pendingCount: number;
   failedCount: number;
   lastSuccessfulRefreshAt: string | null;

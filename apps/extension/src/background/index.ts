@@ -1,4 +1,3 @@
-import { localDateForInstant } from "@leetcode-daily/domain";
 import type {
   DashboardState,
   ExtensionMessage,
@@ -10,10 +9,14 @@ import type {
 import { rebuildDailyActivity } from "./activity-ledger";
 import { syncActivityToCloud } from "./activity-sync";
 import { connectGitHub, deleteGitHubAccount, disconnectGitHub, readGitHubAuth } from "./auth";
-import { clearBadge, setCompletedBadge, setFailureBadge } from "./badge";
+import {
+  RESTORE_STREAK_BADGE_ALARM,
+  setFailureBadge,
+  setStreakBadge,
+} from "./badge";
 import { observeAccepted, retryCandidates } from "./candidates";
 import { readDashboard, refreshDashboard } from "./dashboard";
-import { clearDatabase, countCandidateStates, database } from "./database";
+import { clearDatabase, countCandidateStates } from "./database";
 import {
   ensureHistoryActivityBackfill,
   HISTORY_ACTIVITY_ALARM,
@@ -51,14 +54,7 @@ async function retryWork(force: boolean): Promise<void> {
     await setFailureBadge();
     return;
   }
-  const settings = await readSettings();
-  const today = localDateForInstant(new Date(), settings.timezone);
-  const activity = await (await database()).get("dailyActivity", today);
-  if (activity && activity.acceptedSubmissionCount > 0) {
-    await setCompletedBadge();
-  } else {
-    await clearBadge();
-  }
+  await setStreakBadge();
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -80,6 +76,7 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === RETRY_ALARM) void retryWork(false);
+  if (alarm.name === RESTORE_STREAK_BADGE_ALARM) void setStreakBadge();
   if (alarm.name === HISTORY_IMPORT_ALARM) void runHistoryImport();
   if (alarm.name === HISTORY_ACTIVITY_ALARM) {
     void runHistoryActivityBackfill();

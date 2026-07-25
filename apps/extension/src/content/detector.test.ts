@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isAcceptedResultText,
+  isFreshAcceptedResult,
   isFreshAcceptedResultText,
   submissionIdFromUrl,
   titleSlugFromPathname,
@@ -36,5 +37,11 @@ describe("LeetCode submission detector", () => {
     expect(isFreshAcceptedResultText("通过", "Wrong Answer")).toBe(true);
     expect(isFreshAcceptedResultText("Accepted", "")).toBe(true);
     expect(isFreshAcceptedResultText("通过", undefined)).toBe(true);
+  });
+
+  it("treats a changed submission ID as a fresh Accepted result", () => {
+    expect(isFreshAcceptedResult("通过", "通过", "200", "100")).toBe(true);
+    expect(isFreshAcceptedResult("通过", "通过", "100", "100")).toBe(false);
+    expect(isFreshAcceptedResult("通过", "通过", null, "100")).toBe(false);
   });
 });

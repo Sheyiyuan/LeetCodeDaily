@@ -1,5 +1,6 @@
 export const SUBMIT_BUTTON_SELECTOR = 'button[data-e2e-locator="console-submit-button"]';
 export const SUBMISSION_RESULT_SELECTOR = '[data-e2e-locator="submission-result"]';
+export const SUBMISSION_LINK_SELECTOR = 'a[href*="/submissions/"]';
 
 const SUBMISSION_PATH_PATTERNS = [
   /\/problems\/[^/]+\/submissions\/(\d+)\/?/,
@@ -43,4 +44,15 @@ export function isFreshAcceptedResultText(
   baseline: string | null | undefined,
 ): boolean {
   return isAcceptedResultText(value) && !isAcceptedResultText(baseline);
+}
+
+export function isFreshAcceptedResult(
+  value: string | null | undefined,
+  baselineText: string | null | undefined,
+  submissionId: string | null,
+  baselineSubmissionId: string | null | undefined,
+): boolean {
+  if (!isAcceptedResultText(value)) return false;
+  if (!isAcceptedResultText(baselineText)) return true;
+  return submissionId !== null && submissionId !== baselineSubmissionId;
 }

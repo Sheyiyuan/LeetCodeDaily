@@ -68,9 +68,9 @@ export function isPermanentSyncInputError(cause: unknown): boolean {
 export async function enqueueGitHubSync(
   submission: Submission,
   problem: Problem,
-): Promise<void> {
+): Promise<boolean> {
   const settings = await readSettings();
-  if (!settings.githubRepository) return;
+  if (!settings.githubRepository) return false;
 
   const [owner, repository, ...rest] = settings.githubRepository.split("/");
   if (!owner || !repository || rest.length > 0) {
@@ -102,16 +102,18 @@ export async function enqueueGitHubSync(
   const desiredContentHash = await sha256(
     files.map((file) => `${file.path}\0${file.content}`).join("\0"),
   );
-  if (
-    hasEquivalentSyncJob(existingJobs, {
-      owner,
-      repository,
-      branch: settings.githubBranch,
-      targetPath: directory,
-      desiredContentHash,
-    })
-  ) {
-    return;
+  const equivalentJob = existingJobs.find(
+    (job) =>
+      hasEquivalentSyncJob([job], {
+        owner,
+        repository,
+        branch: settings.githubBranch,
+        targetPath: directory,
+        desiredContentHash,
+      }),
+  );
+  if (equivalentJob) {
+    return equivalentJob.state === "succeeded";
   }
   const now = new Date().toISOString();
   const job: StoredSyncJob = {
@@ -134,6 +136,7 @@ export async function enqueueGitHubSync(
   };
   await db.put("syncJobs", job);
   await runSyncJob(job.id);
+  return (await db.get("syncJobs", job.id))?.state === "succeeded";
 }
 
 export async function runSyncJob(jobId: string): Promise<void> {

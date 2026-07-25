@@ -248,7 +248,8 @@ input:disabled {
   display: flex;
   min-height: 54px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 24px;
   padding: 10px 14px;
 }
 
@@ -274,17 +275,40 @@ input:disabled {
 }
 
 .difficulty-stats {
-  gap: 13px;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  gap: 14px;
 }
 
 .difficulty-stats > span {
   gap: 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .difficulty-stats strong {
   font-size: 12px;
+  font-weight: 680;
+}
+
+.streak-footer {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 8px;
+  white-space: nowrap;
+}
+
+.streak-footer span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.streak-footer strong {
+  color: var(--accent);
+  font-size: 18px;
   font-weight: 680;
 }
 

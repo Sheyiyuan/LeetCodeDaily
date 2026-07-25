@@ -37,6 +37,7 @@ const dashboard: DashboardState = {
     distinctProblemCount: index % 5,
   })),
   todayLocalDate: "2026-07-30",
+  streakDays: 7,
   pendingCount: showQueueFailure ? 0 : 1,
   failedCount: showQueueFailure ? 3 : 0,
   lastSuccessfulRefreshAt: "2026-07-30T08:16:00.000Z",

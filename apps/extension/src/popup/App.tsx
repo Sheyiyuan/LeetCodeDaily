@@ -25,6 +25,7 @@ const EMPTY: DashboardState = {
   stats: null,
   activityDays: [],
   todayLocalDate: new Date().toISOString().slice(0, 10),
+  streakDays: 0,
   pendingCount: 0,
   failedCount: 0,
   lastSuccessfulRefreshAt: null,
@@ -303,6 +304,12 @@ export function App() {
         </span>
         <ExternalLink size={14} />
       </button>
+
+      <div className="streak-footer" aria-label="连续刷题天数">
+        <span>连续刷题</span>
+        <strong>{loading && !state.stats ? "-" : state.streakDays}</strong>
+        <span>天</span>
+      </div>
     </main>
   );
 }

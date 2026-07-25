@@ -10,7 +10,7 @@ import {
   type AcceptedSubmissionSummary,
 } from "@leetcode-daily/leetcode-cn";
 
-import { setCompletedBadge, setFailureBadge } from "./badge";
+import { setCompletedBadge, setFailureBadge, setStreakBadge } from "./badge";
 import { syncActivityToCloud } from "./activity-sync";
 import { rebuildDailyActivity } from "./activity-ledger";
 import { countCandidateStates, database } from "./database";
@@ -121,7 +121,7 @@ async function hydrateCandidate(key: string): Promise<void> {
     });
 
     await rebuildDailyActivity();
-    await enqueueGitHubSync(submission, problem);
+    const githubSynced = await enqueueGitHubSync(submission, problem);
     let activitySyncFailed = false;
     try {
       await syncActivityToCloud();
@@ -131,8 +131,10 @@ async function hydrateCandidate(key: string): Promise<void> {
     const states = await countCandidateStates();
     if (activitySyncFailed || states.failed > 0) {
       await setFailureBadge();
-    } else {
+    } else if (githubSynced) {
       await setCompletedBadge();
+    } else {
+      await setStreakBadge();
     }
   } catch (cause) {
     const retryable =
