@@ -32,3 +32,38 @@ jobs:
           if-no-files-found: error
       - run: pnpm --filter @leetcode-daily/api build
       - run: pnpm run worker:smoke
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: extension-release-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: leetcode-daily-extension
+          path: release
+      - name: Update versioned GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./apps/extension/package.json').version")
+          tag="v${version}"
+          asset="release/leetcode-daily-${version}.zip"
+
+          test -s "$asset"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber
+            gh release edit "$tag" --latest
+          else
+            gh release create "$tag" "$asset" \
+              --target "$GITHUB_SHA" \
+              --title "$tag" \
+              --generate-notes \
+              --latest
+          fi

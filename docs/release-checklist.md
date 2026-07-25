@@ -107,6 +107,8 @@
 
 ## 四、构建、版本与发布操作
 
+`main` 分支提交通过 CI 后，`release` job 会读取扩展 `package.json` 的版本，自动创建或更新对应的 `vX.Y.Z` GitHub Release，并覆盖上传 `leetcode-daily-X.Y.Z.zip`。打包脚本会校验扩展版本号和 manifest 版本一致，发布新版本前必须同步更新两处。
+
 发布候选版本前，在干净工作区执行：
 
 ```bash

@@ -6,6 +6,12 @@ icon_source="$project_root/apps/extension/assets/icon.svg"
 icon_directory="$project_root/apps/extension/public/icons"
 release_directory="$project_root/release"
 version=$(node -p "require('$project_root/apps/extension/package.json').version")
+manifest_version=$(node -p "require('$project_root/apps/extension/public/manifest.json').version")
+
+if [ "$version" != "$manifest_version" ]; then
+  echo "Extension package version ($version) does not match manifest version ($manifest_version)" >&2
+  exit 1
+fi
 
 mkdir -p "$icon_directory" "$release_directory"
 if command -v rsvg-convert >/dev/null 2>&1; then

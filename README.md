@@ -71,7 +71,7 @@ LeetCodeDaily 是一个只面向 [力扣中国站](https://leetcode.cn/) 的 Chr
 ### 通过 Releases 安装
 
 1. 前往 [Releases](https://github.com/yuhhhy/LeetCodeDaily/releases)，打开最新版本
-2. 在 Assets 中下载 `LeetCodeDaily-<版本>.zip`
+2. 在 Assets 中下载 `leetcode-daily-<版本>.zip`
 3. 将 ZIP 文件解压到本地目录
 4. 打开 Chrome 的 `chrome://extensions` 或 Edge 的 `edge://extensions`
 5. 开启“开发者模式”
