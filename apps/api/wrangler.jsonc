@@ -21,7 +21,7 @@
     }
   ],
   "vars": {
-    "ALLOWED_EXTENSION_ORIGIN": "chrome-extension://ihmpbdgefkfolkohjccehkchlafmjfcc",
+    "ALLOWED_EXTENSION_ORIGIN": "chrome-extension://ihmpbdgefkfolkohjccehkchlafmjfcc,chrome-extension://lelfpkchpoacfjmdkadkodnjddddpkfj",
     "PUBLIC_BASE_URL": "https://leetcode-daily-api.deshengl331.workers.dev"
   }
 }

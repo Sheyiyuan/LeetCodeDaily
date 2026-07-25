@@ -2,4 +2,4 @@ GITHUB_CLIENT_ID=replace-with-github-oauth-app-client-id
 GITHUB_CLIENT_SECRET=replace-with-github-oauth-app-client-secret
 TOKEN_ENCRYPTION_KEY=replace-with-base64-encoded-32-byte-key
 PUBLIC_BASE_URL=http://127.0.0.1:8787
-ALLOWED_EXTENSION_ORIGIN=chrome-extension://replace-with-extension-id
+ALLOWED_EXTENSION_ORIGIN=chrome-extension://primary-extension-id,chrome-extension://optional-legacy-id

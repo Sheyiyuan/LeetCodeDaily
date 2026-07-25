@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -21,6 +22,18 @@ const required = [
 if (!existsSync(manifestPath)) throw new Error("Extension manifest is missing");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 if (manifest.manifest_version !== 3) throw new Error("Expected Manifest V3");
+if (typeof manifest.key !== "string" || !manifest.key) {
+  throw new Error(
+    "Extension manifest key is missing; unpacked installs would receive different IDs",
+  );
+}
+const publicKey = Buffer.from(manifest.key, "base64");
+const extensionId = [...createHash("sha256").update(publicKey).digest("hex").slice(0, 32)]
+  .map((character) => String.fromCharCode(97 + Number.parseInt(character, 16)))
+  .join("");
+if (extensionId !== "lelfpkchpoacfjmdkadkodnjddddpkfj") {
+  throw new Error(`Unexpected extension ID: ${extensionId}`);
+}
 for (const file of required) {
   if (!existsSync(join(dist, file))) throw new Error(`Missing extension file: ${file}`);
 }
@@ -41,4 +54,4 @@ for (const forbidden of ["GITHUB_CLIENT_SECRET", "TOKEN_ENCRYPTION_KEY", "client
 if (!manifest.host_permissions.includes("https://leetcode.cn/*")) {
   throw new Error("leetcode.cn permission is missing");
 }
-console.log(`Extension dist check passed (${required.length} required files)`);
+console.log(`Extension dist check passed (${required.length} required files, ID ${extensionId})`);

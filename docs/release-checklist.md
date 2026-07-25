@@ -10,24 +10,24 @@
 
 ### 1. 固定正式扩展身份
 
-- [ ] 确定正式发布渠道：Chrome Web Store，或使用固定私有扩展签名分发。
-- [ ] 获取正式扩展 ID，并记录为唯一的生产 ID。
-- [ ] 将生产 ID 写入 Worker 的 `ALLOWED_EXTENSION_ORIGIN`：
+- [x] Releases 解压安装包通过 manifest 公钥固定扩展身份。
+- [x] Releases 扩展 ID 固定为 `lelfpkchpoacfjmdkadkodnjddddpkfj`。
+- [x] 将 Releases ID 写入 Worker 的 `ALLOWED_EXTENSION_ORIGIN`：
 
   ```text
-  chrome-extension://<production-extension-id>
+  chrome-extension://lelfpkchpoacfjmdkadkodnjddddpkfj
   ```
 
-- [ ] 更新 [apps/api/wrangler.jsonc](../apps/api/wrangler.jsonc) 及其生成的 Worker 类型定义。
-- [ ] 使用生产构建验证 OAuth 回调地址确实是：
+- [x] 更新 [apps/api/wrangler.jsonc](../apps/api/wrangler.jsonc) 及其生成的 Worker 类型定义。
+- [ ] 部署 Worker 后验证 OAuth 回调地址确实是：
 
   ```text
-  https://<production-extension-id>.chromiumapp.org/github
+  https://lelfpkchpoacfjmdkadkodnjddddpkfj.chromiumapp.org/github
   ```
 
-- [ ] 确认开发版、测试版和生产版不会共用错误的 `ALLOWED_EXTENSION_ORIGIN`。
+- [ ] Chrome Web Store 发布前，将商店分配的 ID 加入 allowlist 并完成独立回归。
 
-> 当前配置中的 `ihmpbdgefkfolkohjccehkchlafmjfcc` 是开发扩展 ID，不能直接作为正式发布配置。
+> 当前 allowlist 同时保留旧开发 ID `ihmpbdgefkfolkohjccehkchlafmjfcc`，用于迁移已有安装；稳定发布后应按计划移除。
 
 ### 2. 部署生产 Worker 和 D1
 

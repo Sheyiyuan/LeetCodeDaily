@@ -77,6 +77,8 @@ LeetCodeDaily 是一个只面向 [力扣中国站](https://leetcode.cn/) 的 Chr
 5. 开启“开发者模式”
 6. 点击“加载已解压的扩展程序”，选择解压后的目录
 
+发布包通过 manifest 公钥固定扩展 ID 为 `lelfpkchpoacfjmdkadkodnjddddpkfj`。新用户应直接安装包含该公钥的版本；旧安装若已能正常使用可以继续保留，遇到 `invalid_redirect_uri` 的旧安装需要移除后重新加载新版目录，并重新填写本地设置。
+
 ### 从源码构建安装
 
 1. 打开 Chrome 的 `chrome://extensions` 或 Edge 的 `edge://extensions`

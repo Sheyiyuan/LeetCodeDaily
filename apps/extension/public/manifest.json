@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "LeetCodeDaily",
   "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxcXjwbcheCiECxn8KOeL6bAZQvG4iFXVvyg5W/bpG0kGHTm0GEhMHOEldxHCRnCrUarK5wy4I1lMGBBIS1HYVt0tuCSYfqmOdHZFVo7iuUcjCsmqioun8I7TraM4IVC9fY388Rz8MBvHyIWiIg06CDLrgmxnDnCTYbpDojopZk0sdV8FUpQv1lKv8sEiP83hvyxUtr6xRB6zQ8nl/HX/upBK+ti8eFsDl9clHc/oWXbW/ZMklBI4D+FvuF8crznWNitce8CKpB975QGHfxFurU9yCOJXlq84DwdMxMICDK5U34LX8p8FWTtgtBlCIphbFFAZ+5utNgp6UMYM+y1g1wIDAQAB",
   "description": "记录 leetcode.cn 刷题活动并同步到 GitHub。",
   "permissions": ["storage", "alarms", "identity"],
   "host_permissions": [

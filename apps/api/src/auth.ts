@@ -1,4 +1,5 @@
 import type { Env } from "./env";
+import { isAllowedChromiumAppRedirect } from "./extension-origin";
 import { json } from "./http";
 import { decryptSecret, encryptSecret } from "./security/encryption";
 import { encryptionKeyForVersion, readEncryptionKeyRing } from "./security/key-ring";
@@ -74,23 +75,11 @@ function tokenExpiresAt(now: Date, expiresIn: number | undefined): string {
     : NON_EXPIRING_TOKEN_EXPIRES_AT;
 }
 
-function extensionId(env: { ALLOWED_EXTENSION_ORIGIN: string }): string | null {
-  const match = env.ALLOWED_EXTENSION_ORIGIN.match(/^chrome-extension:\/\/([a-p]{32})$/);
-  return match?.[1] ?? null;
-}
-
 export function isAllowedAuthRedirect(
   value: unknown,
   env: { ALLOWED_EXTENSION_ORIGIN: string },
 ): value is string {
-  if (typeof value !== "string") return false;
-  try {
-    const url = new URL(value);
-    const id = extensionId(env);
-    return id !== null && url.protocol === "https:" && url.hostname === `${id}.chromiumapp.org`;
-  } catch {
-    return false;
-  }
+  return isAllowedChromiumAppRedirect(value, env);
 }
 
 async function tokenRequest(fields: Record<string, string>): Promise<GitHubTokenResponse> {

@@ -3,7 +3,7 @@
 // Runtime types generated with workerd@1.20260721.1 2026-07-24 nodejs_compat
 interface __BaseEnv_Env {
 	DB: D1Database;
-	ALLOWED_EXTENSION_ORIGIN: "chrome-extension://ihmpbdgefkfolkohjccehkchlafmjfcc";
+	ALLOWED_EXTENSION_ORIGIN: "chrome-extension://ihmpbdgefkfolkohjccehkchlafmjfcc,chrome-extension://lelfpkchpoacfjmdkadkodnjddddpkfj";
 	PUBLIC_BASE_URL: "https://leetcode-daily-api.deshengl331.workers.dev";
 }
 declare namespace Cloudflare {
