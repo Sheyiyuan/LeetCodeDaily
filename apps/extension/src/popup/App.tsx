@@ -3,6 +3,7 @@ import {
   Check,
   Code2,
   ExternalLink,
+  LoaderCircle,
   Moon,
   RefreshCw,
   RotateCcw,
@@ -146,6 +147,21 @@ export function App() {
     void load(true);
   }, [load]);
 
+  useEffect(() => {
+    let active = true;
+    const interval = window.setInterval(() => {
+      void sendDashboardMessage("dashboard-read")
+        .then((next) => {
+          if (active) setState(next);
+        })
+        .catch(() => undefined);
+    }, 2_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const signedIn = state.account?.isSignedIn === true;
   const displayName = signedIn
     ? state.account?.displayName?.trim() || state.account?.username
@@ -160,6 +176,17 @@ export function App() {
     clientError?.trim() ||
     state.error?.trim() ||
     (state.failedCount > 0 ? `${state.failedCount} 项任务失败，请点击重试查看原因` : null);
+  const githubSync = !github.connected
+    ? { tone: "muted", label: "未连接", icon: <Code2 size={13} /> }
+    : state.failedCount > 0
+      ? { tone: "failure", label: `${state.failedCount} 项失败`, icon: <TriangleAlert size={13} /> }
+      : state.pendingCount > 0
+        ? {
+            tone: "pending",
+            label: `${state.pendingCount} 项同步中`,
+            icon: <LoaderCircle className="spin" size={13} />,
+          }
+        : { tone: "success", label: "已同步", icon: <Check size={13} /> };
 
   return (
     <main className="popup-shell">
@@ -275,6 +302,11 @@ export function App() {
             <span>GitHub</span>
             <strong>{github.connected ? github.login : "未连接"}</strong>
           </div>
+          <div>
+            <span className={`status-icon ${githubSync.tone}`}>{githubSync.icon}</span>
+            <span>GitHub 同步</span>
+            <strong>{githubSync.label}</strong>
+          </div>
           {state.failedCount > 0 ? (
             <div>
               <span className="status-icon failure">
@@ -305,7 +337,7 @@ export function App() {
         <ExternalLink size={14} />
       </button>
 
-      <div className="streak-footer" aria-label="连续刷题天数">
+      <div className="streak-footer">
         <span>连续刷题</span>
         <strong>{loading && !state.stats ? "-" : state.streakDays}</strong>
         <span>天</span>
