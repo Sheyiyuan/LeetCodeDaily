@@ -92,6 +92,19 @@ export async function startHistoryImport(): Promise<HistoryImportStatus> {
   if (existing?.state === "running" || existing?.state === "paused") {
     return historyImportStatus(existing);
   }
+  if (existing?.state === "failed") {
+    return resumeHistoryImport();
+  }
+  // Older jobs could be marked completed while still carrying failures. Keep
+  // those jobs resumable instead of silently starting a full replacement job.
+  if (existing?.state === "completed" && existing.failures.length > 0) {
+    await db.put("historyImport", {
+      ...existing,
+      state: "failed",
+      updatedAt: new Date().toISOString(),
+    });
+    return resumeHistoryImport();
+  }
 
   const problems = await leetcodeClient.getSolvedProblems();
   const now = new Date().toISOString();
