@@ -1,23 +1,24 @@
+import { localDateForInstant } from "@leetcode-daily/domain";
 import type {
   DashboardState,
   ExtensionMessage,
   ExtensionSettings,
   GitHubAuthState,
-  GitHubRepositorySummary,
   HistoryImportStatus,
   MessageResponse,
 } from "../shared/messages";
-import { localDateForInstant } from "@leetcode-daily/domain";
-import { observeAccepted, retryCandidates } from "./candidates";
-import { connectGitHub, deleteGitHubAccount, disconnectGitHub, readGitHubAuth } from "./auth";
-import { syncActivityToCloud } from "./activity-sync";
 import { rebuildDailyActivity } from "./activity-ledger";
-import { readDashboard, refreshDashboard } from "./dashboard";
-import { readAuthorizedRepositories, readRepositoryBranches } from "./repositories";
-import { readSettings, writeSettings } from "./settings";
-import { retrySyncJobs } from "./sync";
-import { clearDatabase, countCandidateStates, database } from "./database";
+import { syncActivityToCloud } from "./activity-sync";
+import { connectGitHub, deleteGitHubAccount, disconnectGitHub, readGitHubAuth } from "./auth";
 import { clearBadge, setCompletedBadge, setFailureBadge } from "./badge";
+import { observeAccepted, retryCandidates } from "./candidates";
+import { readDashboard, refreshDashboard } from "./dashboard";
+import { clearDatabase, countCandidateStates, database } from "./database";
+import {
+  ensureHistoryActivityBackfill,
+  HISTORY_ACTIVITY_ALARM,
+  runHistoryActivityBackfill,
+} from "./history-activity";
 import {
   cancelHistoryImport,
   HISTORY_IMPORT_ALARM,
@@ -27,11 +28,9 @@ import {
   runHistoryImport,
   startHistoryImport,
 } from "./history-import";
-import {
-  ensureHistoryActivityBackfill,
-  HISTORY_ACTIVITY_ALARM,
-  runHistoryActivityBackfill,
-} from "./history-activity";
+import { readRepositoryBranches } from "./repositories";
+import { readSettings, writeSettings } from "./settings";
+import { retrySyncJobs } from "./sync";
 
 const RETRY_ALARM = "retry-failed-work";
 
@@ -97,7 +96,6 @@ chrome.runtime.onMessage.addListener(
         | ExtensionSettings
         | undefined
         | GitHubAuthState
-        | GitHubRepositorySummary[]
         | string[]
         | HistoryImportStatus
       >,
@@ -137,9 +135,6 @@ chrome.runtime.onMessage.addListener(
             await deleteGitHubAccount();
             await clearDatabase();
             sendResponse({ ok: true });
-            break;
-          case "github-repositories-read":
-            sendResponse({ ok: true, data: await readAuthorizedRepositories() });
             break;
           case "github-branches-read":
             sendResponse({

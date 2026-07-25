@@ -1,43 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { ExtensionSettings, GitHubRepositorySummary } from "../shared/messages";
-import { autoSelectSingleRepository } from "./App";
+import { repositoryIsValid } from "./App";
 
-const settings: ExtensionSettings = {
-  timezone: "Asia/Shanghai",
-  githubRepository: null,
-  githubBranch: "main",
-  githubRootDirectory: "",
-  heatmapPublicEnabled: false,
-};
-
-const repository: GitHubRepositorySummary = {
-  fullName: "octocat/leetcode-solutions",
-  owner: "octocat",
-  name: "leetcode-solutions",
-  defaultBranch: "trunk",
-  private: false,
-};
-
-describe("automatic repository selection", () => {
-  it("selects and keeps the default branch for the only authorized repository", () => {
-    expect(autoSelectSingleRepository(settings, [repository])).toMatchObject({
-      githubRepository: "octocat/leetcode-solutions",
-      githubBranch: "trunk",
-    });
+describe("manual repository validation", () => {
+  it("accepts owner/repository names", () => {
+    expect(repositoryIsValid("octocat/leetcode-solutions")).toBe(true);
+    expect(repositoryIsValid("octocat/leetcode-daily")).toBe(true);
   });
 
-  it("does not guess when there are multiple repositories or an existing choice", () => {
-    expect(
-      autoSelectSingleRepository(settings, [
-        repository,
-        { ...repository, fullName: "octocat/other", name: "other" },
-      ]),
-    ).toBeNull();
-    expect(
-      autoSelectSingleRepository({ ...settings, githubRepository: repository.fullName }, [
-        repository,
-      ]),
-    ).toBeNull();
+  it("rejects missing owner, repository, or whitespace", () => {
+    expect(repositoryIsValid(null)).toBe(true);
+    expect(repositoryIsValid("octocat")).toBe(false);
+    expect(repositoryIsValid("/leetcode-daily")).toBe(false);
+    expect(repositoryIsValid("octocat/leetcode-daily/extra")).toBe(false);
+    expect(repositoryIsValid("octocat/leetcode daily")).toBe(false);
   });
 });

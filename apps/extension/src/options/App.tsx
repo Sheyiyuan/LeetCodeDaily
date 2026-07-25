@@ -24,7 +24,6 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ExtensionSettings,
   GitHubAuthState,
-  GitHubRepositorySummary,
   HistoryImportStatus,
   MessageResponse,
 } from "../shared/messages";
@@ -58,7 +57,7 @@ const EMPTY_IMPORT: HistoryImportStatus = {
   updatedAt: null,
 };
 
-function repositoryIsValid(value: string | null): boolean {
+export function repositoryIsValid(value: string | null): boolean {
   return value === null || /^[^/\s]+\/[^/\s]+$/.test(value);
 }
 
@@ -71,20 +70,6 @@ function timezoneIsValid(value: string): boolean {
   }
 }
 
-export function autoSelectSingleRepository(
-  settings: ExtensionSettings,
-  repositories: GitHubRepositorySummary[],
-): ExtensionSettings | null {
-  if (settings.githubRepository || repositories.length !== 1) return null;
-  const repository = repositories[0];
-  if (!repository) return null;
-  return {
-    ...settings,
-    githubRepository: repository.fullName,
-    githubBranch: repository.defaultBranch || settings.githubBranch,
-  };
-}
-
 export function App() {
   const [settings, setSettings] = useState(FALLBACK);
   const [github, setGithub] = useState(EMPTY_GITHUB);
@@ -94,7 +79,6 @@ export function App() {
   const [embedCopied, setEmbedCopied] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [repositoryBusy, setRepositoryBusy] = useState(false);
-  const [repositories, setRepositories] = useState<GitHubRepositorySummary[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [historyImport, setHistoryImport] = useState(EMPTY_IMPORT);
   const [historyBusy, setHistoryBusy] = useState(false);
@@ -136,23 +120,19 @@ export function App() {
     };
   }, []);
 
-  // The loader intentionally runs only when the connection state changes;
-  // rerunning it for every settings edit would overwrite an in-progress choice.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadRepositories reads the initial connection settings by design.
   useEffect(() => {
-    if (github.connected) void loadRepositories();
-    else {
-      setRepositories([]);
+    if (!github.connected) {
       setBranches([]);
     }
   }, [github.connected]);
 
   const validationError = useMemo(() => {
     if (!timezoneIsValid(settings.timezone)) return "请输入有效的 IANA 时区";
+    if (github.connected && !settings.githubRepository) return "请先填写 GitHub 仓库";
     if (!repositoryIsValid(settings.githubRepository)) return "仓库格式应为 owner/repository";
     if (!settings.githubBranch.trim()) return "分支不能为空";
     return null;
-  }, [settings]);
+  }, [github.connected, settings]);
 
   async function toggleGitHub(): Promise<void> {
     setAuthBusy(true);
@@ -170,59 +150,29 @@ export function App() {
     }
   }
 
-  async function loadRepositories(): Promise<void> {
+  async function loadBranches(repository: string): Promise<void> {
+    const normalized = repository.trim();
+    if (!repositoryIsValid(normalized) || !normalized) {
+      setError("仓库格式应为 owner/repository");
+      return;
+    }
     setRepositoryBusy(true);
     setError(null);
     try {
       const response = (await chrome.runtime.sendMessage({
-        type: "github-repositories-read",
-      })) as MessageResponse<GitHubRepositorySummary[]>;
-      if (!response.ok) throw new Error(response.error ?? "仓库列表读取失败");
-      const nextRepositories = response.data ?? [];
-      setRepositories(nextRepositories);
-      const autoSettings = autoSelectSingleRepository(settings, nextRepositories);
-      if (autoSettings) {
-        const saveResponse = (await chrome.runtime.sendMessage({
-          type: "settings-write",
-          payload: autoSettings,
-        })) as MessageResponse<undefined>;
-        if (!saveResponse.ok) throw new Error(saveResponse.error ?? "仓库设置保存失败");
-        setSettings(autoSettings);
-        setSaved(true);
-        window.setTimeout(() => setSaved(false), 1_500);
-        await loadBranches(autoSettings.githubRepository as string);
-      } else if (settings.githubRepository) {
-        await loadBranches(settings.githubRepository);
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "仓库列表读取失败");
-    } finally {
-      setRepositoryBusy(false);
-    }
-  }
-
-  async function loadBranches(repository: string): Promise<void> {
-    const response = (await chrome.runtime.sendMessage({
-      type: "github-branches-read",
-      payload: { repository },
-    })) as MessageResponse<string[]>;
-    if (!response.ok) throw new Error(response.error ?? "分支列表读取失败");
-    setBranches(response.data ?? []);
-  }
-
-  async function selectRepository(repository: string): Promise<void> {
-    const selected = repositories.find((item) => item.fullName === repository);
-    setSettings({
-      ...settings,
-      githubRepository: repository || null,
-      githubBranch: selected?.defaultBranch ?? settings.githubBranch,
-    });
-    setBranches([]);
-    if (!repository) return;
-    setRepositoryBusy(true);
-    setError(null);
-    try {
-      await loadBranches(repository);
+        type: "github-branches-read",
+        payload: { repository: normalized },
+      })) as MessageResponse<string[]>;
+      if (!response.ok) throw new Error(response.error ?? "分支列表读取失败");
+      const nextBranches = response.data ?? [];
+      setBranches(nextBranches);
+      setSettings((current) =>
+        current.githubRepository === normalized &&
+        nextBranches.length > 0 &&
+        !nextBranches.includes(current.githubBranch)
+          ? { ...current, githubBranch: nextBranches[0] ?? current.githubBranch }
+          : current,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "分支列表读取失败");
     } finally {
@@ -364,7 +314,9 @@ export function App() {
             </span>
             <div>
               <strong>{github.connected ? `已连接 @${github.login}` : "尚未连接 GitHub"}</strong>
-              <small>{github.connected ? "GitHub App 授权有效" : "连接后可同步题解仓库"}</small>
+              <small>
+                {github.connected ? "GitHub OAuth App 授权有效" : "连接后可同步题解仓库"}
+              </small>
             </div>
             <button
               className="secondary-button"
@@ -380,39 +332,39 @@ export function App() {
             <label>
               <span>目标仓库</span>
               <div className="select-with-action">
-                <div className="select-with-icon">
+                <div className="input-with-icon">
                   <FolderGit2 size={15} />
-                  <select
-                    disabled={!github.connected || repositoryBusy}
-                    onChange={(event) => void selectRepository(event.target.value)}
+                  <input
+                    disabled={!github.connected}
+                    onBlur={(event) => {
+                      if (event.target.value.trim()) void loadBranches(event.target.value);
+                    }}
+                    onChange={(event) => {
+                      setSettings({
+                        ...settings,
+                        githubRepository: event.target.value,
+                      });
+                      setBranches([]);
+                    }}
+                    placeholder="owner/repository"
+                    spellCheck={false}
                     value={settings.githubRepository ?? ""}
-                  >
-                    <option value="">选择已授权仓库</option>
-                    {settings.githubRepository &&
-                    !repositories.some(
-                      (repository) => repository.fullName === settings.githubRepository,
-                    ) ? (
-                      <option value={settings.githubRepository}>{settings.githubRepository}</option>
-                    ) : null}
-                    {repositories.map((repository) => (
-                      <option key={repository.fullName} value={repository.fullName}>
-                        {repository.fullName}
-                        {repository.private ? "（私有）" : ""}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 <button
-                  aria-label="刷新仓库列表"
+                  aria-label="读取仓库分支"
                   className="icon-button bordered"
-                  disabled={!github.connected || repositoryBusy}
-                  onClick={() => void loadRepositories()}
-                  title="刷新仓库列表"
+                  disabled={!github.connected || repositoryBusy || !settings.githubRepository}
+                  onClick={() => {
+                    if (settings.githubRepository) void loadBranches(settings.githubRepository);
+                  }}
+                  title="读取仓库分支"
                   type="button"
                 >
                   <RefreshCw className={repositoryBusy ? "spin" : ""} size={15} />
                 </button>
               </div>
+              <small>请先在 GitHub 创建仓库，再填写 owner/repository</small>
             </label>
           </div>
           <div className="field-grid">

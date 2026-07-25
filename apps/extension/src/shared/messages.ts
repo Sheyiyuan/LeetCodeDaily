@@ -1,21 +1,9 @@
-import type {
-  AccountStatus,
-  SolvedStats,
-  SubmissionCandidate,
-} from "@leetcode-daily/domain";
+import type { AccountStatus, SolvedStats, SubmissionCandidate } from "@leetcode-daily/domain";
 
 export interface ActivityDaySummary {
   localDate: string;
   acceptedSubmissionCount: number;
   distinctProblemCount: number;
-}
-
-export interface GitHubRepositorySummary {
-  fullName: string;
-  owner: string;
-  name: string;
-  defaultBranch: string;
-  private: boolean;
 }
 
 export type HistoryImportState =
@@ -44,10 +32,7 @@ export type ExtensionMessage =
       type: "accepted-observed";
       payload: Pick<
         SubmissionCandidate,
-        | "submissionId"
-        | "previousSubmissionId"
-        | "titleSlug"
-        | "observedAt"
+        "submissionId" | "previousSubmissionId" | "titleSlug" | "observedAt"
       >;
     }
   | { type: "dashboard-refresh" }
@@ -56,7 +41,6 @@ export type ExtensionMessage =
   | { type: "github-connect" }
   | { type: "github-disconnect" }
   | { type: "github-delete-account" }
-  | { type: "github-repositories-read" }
   | {
       type: "github-branches-read";
       payload: { repository: string };

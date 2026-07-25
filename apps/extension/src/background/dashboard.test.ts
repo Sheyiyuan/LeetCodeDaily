@@ -75,7 +75,7 @@ describe("dashboard failure reporting", () => {
     ).toBe("3 项任务失败，旧记录没有错误详情，请点击重试");
   });
 
-  it("turns legacy GitHub App permission errors into actionable guidance", () => {
+  it("turns legacy GitHub permission errors into actionable guidance", () => {
     expect(
       latestFailureMessage(
         [],
@@ -87,6 +87,6 @@ describe("dashboard failure reporting", () => {
           },
         ],
       ),
-    ).toContain("Contents 设为 Read and write");
+    ).toContain("owner/repository");
   });
 });

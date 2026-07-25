@@ -8,7 +8,6 @@ import type {
   DashboardState,
   ExtensionSettings,
   GitHubAuthState,
-  GitHubRepositorySummary,
   HistoryImportStatus,
   MessageResponse,
 } from "./shared/messages";
@@ -76,23 +75,6 @@ const historyImport: HistoryImportStatus = {
   updatedAt: "2026-07-30T08:16:00.000Z",
 };
 
-const repositories: GitHubRepositorySummary[] = [
-  {
-    fullName: "yuhhhy/leetcode-solutions",
-    owner: "yuhhhy",
-    name: "leetcode-solutions",
-    defaultBranch: "main",
-    private: false,
-  },
-  {
-    fullName: "yuhhhy/interview-notes",
-    owner: "yuhhhy",
-    name: "interview-notes",
-    defaultBranch: "main",
-    private: true,
-  },
-];
-
 const storage = new Map<string, unknown>([["uiTheme", "dark"]]);
 
 function response<T>(data: T): MessageResponse<T> {
@@ -113,8 +95,6 @@ function installChromeMock(): void {
             return response(github);
           case "settings-read":
             return response(settings);
-          case "github-repositories-read":
-            return response(repositories);
           case "github-branches-read":
             return response(["main", "develop"]);
           case "history-import-read":

@@ -1,10 +1,7 @@
 import type { Env } from "./env";
 import { json } from "./http";
 import { decryptSecret, encryptSecret } from "./security/encryption";
-import {
-  encryptionKeyForVersion,
-  readEncryptionKeyRing,
-} from "./security/key-ring";
+import { encryptionKeyForVersion, readEncryptionKeyRing } from "./security/key-ring";
 import { authenticate, sha256Hex } from "./security/session";
 
 interface GitHubTokenResponse {
@@ -38,16 +35,17 @@ interface AuthGrant {
   used_at: string | null;
 }
 
+// Classic OAuth App tokens are commonly non-expiring. Keep one canonical
+// timestamp so the extension can treat them as a durable credential while
+// still using the existing short-lived browser session flow.
+const NON_EXPIRING_TOKEN_EXPIRES_AT = "9999-12-31T23:59:59.999Z";
+
 function requireConfiguration(env: Env): asserts env is Env & {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   PUBLIC_BASE_URL: string;
 } {
-  if (
-    !env.GITHUB_CLIENT_ID ||
-    !env.GITHUB_CLIENT_SECRET ||
-    !env.PUBLIC_BASE_URL
-  ) {
+  if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET || !env.PUBLIC_BASE_URL) {
     throw new Error("GitHub authentication is not configured");
   }
   readEncryptionKeyRing(env);
@@ -57,31 +55,27 @@ function randomToken(byteLength = 32): string {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/, "");
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 function base64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/, "");
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 function addSeconds(date: Date, seconds: number): string {
   return new Date(date.getTime() + seconds * 1_000).toISOString();
 }
 
-function extensionId(
-  env: { ALLOWED_EXTENSION_ORIGIN: string },
-): string | null {
-  const match = env.ALLOWED_EXTENSION_ORIGIN.match(
-    /^chrome-extension:\/\/([a-p]{32})$/,
-  );
+function tokenExpiresAt(now: Date, expiresIn: number | undefined): string {
+  return typeof expiresIn === "number" && expiresIn > 0
+    ? addSeconds(now, expiresIn)
+    : NON_EXPIRING_TOKEN_EXPIRES_AT;
+}
+
+function extensionId(env: { ALLOWED_EXTENSION_ORIGIN: string }): string | null {
+  const match = env.ALLOWED_EXTENSION_ORIGIN.match(/^chrome-extension:\/\/([a-p]{32})$/);
   return match?.[1] ?? null;
 }
 
@@ -93,19 +87,13 @@ export function isAllowedAuthRedirect(
   try {
     const url = new URL(value);
     const id = extensionId(env);
-    return (
-      id !== null &&
-      url.protocol === "https:" &&
-      url.hostname === `${id}.chromiumapp.org`
-    );
+    return id !== null && url.protocol === "https:" && url.hostname === `${id}.chromiumapp.org`;
   } catch {
     return false;
   }
 }
 
-async function tokenRequest(
-  fields: Record<string, string>,
-): Promise<GitHubTokenResponse> {
+async function tokenRequest(fields: Record<string, string>): Promise<GitHubTokenResponse> {
   const response = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
     headers: {
@@ -116,9 +104,7 @@ async function tokenRequest(
   });
   const body = (await response.json()) as GitHubTokenResponse;
   if (!response.ok || body.error) {
-    throw new Error(
-      body.error_description ?? body.error ?? "GitHub token request failed",
-    );
+    throw new Error(body.error_description ?? body.error ?? "GitHub token request failed");
   }
   return body;
 }
@@ -140,10 +126,7 @@ function callbackUrl(env: Env & { PUBLIC_BASE_URL: string }): string {
   return `${env.PUBLIC_BASE_URL.replace(/\/+$/, "")}/v1/auth/github/callback`;
 }
 
-function redirectWith(
-  redirectUri: string,
-  fields: Record<string, string>,
-): Response {
+function redirectWith(redirectUri: string, fields: Record<string, string>): Response {
   const destination = new URL(redirectUri);
   for (const [name, value] of Object.entries(fields)) {
     destination.searchParams.set(name, value);
@@ -151,10 +134,7 @@ function redirectWith(
   return Response.redirect(destination.toString(), 302);
 }
 
-export async function startGitHubAuth(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function startGitHubAuth(request: Request, env: Env): Promise<Response> {
   requireConfiguration(env);
   const body = (await request.json().catch(() => null)) as {
     redirectUri?: unknown;
@@ -165,10 +145,7 @@ export async function startGitHubAuth(
 
   const state = randomToken();
   const verifier = randomToken(48);
-  const verifierDigest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(verifier),
-  );
+  const verifierDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
   const now = new Date();
   await env.DB.prepare(
     `INSERT INTO auth_attempts
@@ -187,6 +164,7 @@ export async function startGitHubAuth(
   const authorizeUrl = new URL("https://github.com/login/oauth/authorize");
   authorizeUrl.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
   authorizeUrl.searchParams.set("redirect_uri", callbackUrl(env));
+  authorizeUrl.searchParams.set("scope", "repo");
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("code_challenge", base64Url(new Uint8Array(verifierDigest)));
   authorizeUrl.searchParams.set("code_challenge_method", "S256");
@@ -194,10 +172,7 @@ export async function startGitHubAuth(
   return json({ authorizeUrl: authorizeUrl.toString() });
 }
 
-export async function finishGitHubAuth(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function finishGitHubAuth(request: Request, env: Env): Promise<Response> {
   requireConfiguration(env);
   const url = new URL(request.url);
   const state = url.searchParams.get("state");
@@ -214,9 +189,7 @@ export async function finishGitHubAuth(
   if (!attempt || attempt.expires_at <= new Date().toISOString()) {
     return json({ error: "invalid_or_expired_state" }, { status: 400 });
   }
-  await env.DB.prepare("DELETE FROM auth_attempts WHERE state_hash = ?")
-    .bind(stateHash)
-    .run();
+  await env.DB.prepare("DELETE FROM auth_attempts WHERE state_hash = ?").bind(stateHash).run();
 
   const oauthError = url.searchParams.get("error");
   const code = url.searchParams.get("code");
@@ -234,30 +207,24 @@ export async function finishGitHubAuth(
       redirect_uri: callbackUrl(env),
       code_verifier: attempt.code_verifier,
     });
+    if (!token.access_token) throw new Error("GitHub OAuth App did not return an access token");
+    const hasExpiryFields =
+      token.expires_in !== undefined ||
+      token.refresh_token !== undefined ||
+      token.refresh_token_expires_in !== undefined;
     if (
-      !token.access_token ||
-      !token.refresh_token ||
-      !token.expires_in ||
-      !token.refresh_token_expires_in
+      hasExpiryFields &&
+      (!token.refresh_token || !token.expires_in || !token.refresh_token_expires_in)
     ) {
-      throw new Error("GitHub App must enable expiring user access tokens");
+      throw new Error("GitHub OAuth App returned an incomplete expiring token");
     }
 
     const user = await githubUser(token.access_token);
     const now = new Date();
     const keyRing = readEncryptionKeyRing(env);
-    const activeKey = encryptionKeyForVersion(
-      keyRing,
-      keyRing.activeVersion,
-    );
-    const access = await encryptSecret(
-      token.access_token,
-      activeKey,
-    );
-    const refresh = await encryptSecret(
-      token.refresh_token,
-      activeKey,
-    );
+    const activeKey = encryptionKeyForVersion(keyRing, keyRing.activeVersion);
+    const access = await encryptSecret(token.access_token, activeKey);
+    const credential = await encryptSecret(token.refresh_token ?? token.access_token, activeKey);
     const existing = await env.DB.prepare(
       "SELECT current_login FROM github_accounts WHERE github_user_id = ?",
     )
@@ -291,10 +258,10 @@ export async function finishGitHubAuth(
            updated_at = excluded.updated_at`,
       ).bind(
         user.id,
-        refresh.ciphertext,
-        refresh.nonce,
+        credential.ciphertext,
+        credential.nonce,
         keyRing.activeVersion,
-        addSeconds(now, token.refresh_token_expires_in),
+        token.refresh_token_expires_in ? addSeconds(now, token.refresh_token_expires_in) : null,
         now.toISOString(),
       ),
     ]);
@@ -324,7 +291,7 @@ export async function finishGitHubAuth(
         access.ciphertext,
         access.nonce,
         keyRing.activeVersion,
-        addSeconds(now, token.expires_in),
+        tokenExpiresAt(now, token.expires_in),
         addSeconds(now, 5 * 60),
         now.toISOString(),
       )
@@ -336,10 +303,7 @@ export async function finishGitHubAuth(
   }
 }
 
-export async function exchangeAuthGrant(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function exchangeAuthGrant(request: Request, env: Env): Promise<Response> {
   requireConfiguration(env);
   const body = (await request.json().catch(() => null)) as {
     grant?: unknown;
@@ -409,10 +373,7 @@ export async function exchangeAuthGrant(
   });
 }
 
-export async function refreshGitHubAccess(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function refreshGitHubAccess(request: Request, env: Env): Promise<Response> {
   requireConfiguration(env);
   const session = await authenticate(request, env);
   if (!session) return json({ error: "unauthorized" }, { status: 401 });
@@ -431,14 +392,25 @@ export async function refreshGitHubAccess(
     }>();
   if (
     !credential ||
-    (credential.token_expires_at &&
-      credential.token_expires_at <= new Date().toISOString())
+    (credential.token_expires_at && credential.token_expires_at <= new Date().toISOString())
   ) {
     return json({ error: "reauthorization_required" }, { status: 401 });
   }
 
+  const keyRing = readEncryptionKeyRing(env);
+  if (!credential.token_expires_at) {
+    const accessToken = await decryptSecret(
+      credential.encrypted_refresh_token,
+      credential.nonce,
+      encryptionKeyForVersion(keyRing, credential.key_version),
+    );
+    return json({
+      accessToken,
+      accessTokenExpiresAt: NON_EXPIRING_TOKEN_EXPIRES_AT,
+    });
+  }
+
   try {
-    const keyRing = readEncryptionKeyRing(env);
     const oldRefresh = await decryptSecret(
       credential.encrypted_refresh_token,
       credential.nonce,
@@ -480,22 +452,17 @@ export async function refreshGitHubAccess(
       .run();
     return json({
       accessToken: token.access_token,
-      accessTokenExpiresAt: addSeconds(now, token.expires_in),
+      accessTokenExpiresAt: tokenExpiresAt(now, token.expires_in),
     });
   } catch {
     return json({ error: "reauthorization_required" }, { status: 401 });
   }
 }
 
-export async function revokeSession(
-  request: Request,
-  env: Env,
-): Promise<Response> {
+export async function revokeSession(request: Request, env: Env): Promise<Response> {
   const session = await authenticate(request, env);
   if (!session) return json({ error: "unauthorized" }, { status: 401 });
-  await env.DB.prepare(
-    "UPDATE sessions SET revoked_at = ? WHERE session_id = ?",
-  )
+  await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE session_id = ?")
     .bind(new Date().toISOString(), session.sessionId)
     .run();
   return new Response(null, { status: 204 });

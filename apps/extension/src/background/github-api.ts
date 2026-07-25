@@ -1,17 +1,3 @@
-import type { GitHubRepositorySummary } from "../shared/messages";
-
-interface GitHubInstallation {
-  id: number;
-}
-
-interface GitHubRepositoryResponse {
-  name: string;
-  full_name: string;
-  private: boolean;
-  default_branch: string;
-  owner: { login: string };
-}
-
 const defaultFetch: typeof fetch = (input, init) => globalThis.fetch(input, init);
 
 export class GitHubApiError extends Error {
@@ -31,58 +17,21 @@ export class GitHubRepositoryClient {
     private readonly apiBaseUrl = "https://api.github.com",
   ) {}
 
-  async listAuthorizedRepositories(): Promise<GitHubRepositorySummary[]> {
-    const installations = await this.collectPages<GitHubInstallation>(
-      "/user/installations",
-      "installations",
-    );
-    const repositories = (
-      await Promise.all(
-        installations.map((installation) =>
-          this.collectPages<GitHubRepositoryResponse>(
-            `/user/installations/${installation.id}/repositories`,
-            "repositories",
-          ),
-        ),
-      )
-    ).flat();
-
-    return [...new Map(repositories.map((repository) => [repository.full_name, repository])).values()]
-      .map((repository) => ({
-        fullName: repository.full_name,
-        owner: repository.owner.login,
-        name: repository.name,
-        defaultBranch: repository.default_branch,
-        private: repository.private,
-      }))
-      .sort((left, right) => left.fullName.localeCompare(right.fullName));
-  }
-
   async listBranches(repository: string): Promise<string[]> {
     const [owner, name, ...rest] = repository.split("/");
     if (!owner || !name || rest.length > 0) {
       throw new TypeError("GitHub 仓库必须使用 owner/repository 格式");
     }
-    const branches = await this.collectArrayPages<{ name: string }>(
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/branches`,
-    );
-    return [...new Set(branches.map((branch) => branch.name))].sort((left, right) =>
-      left.localeCompare(right),
-    );
-  }
-
-  private async collectPages<T>(path: string, key: string): Promise<T[]> {
-    const values: T[] = [];
-    for (let page = 1; page <= 100; page += 1) {
-      const payload = await this.request<Record<string, unknown>>(
-        `${path}${path.includes("?") ? "&" : "?"}per_page=100&page=${page}`,
-      );
-      const items = payload[key];
-      if (!Array.isArray(items)) throw new Error(`GitHub 响应缺少 ${key}`);
-      values.push(...(items as T[]));
-      if (items.length < 100) break;
-    }
-    return values;
+    const repositoryPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+    const metadata = await this.request<{ default_branch?: string }>(repositoryPath);
+    const branches = await this.collectArrayPages<{ name: string }>(`${repositoryPath}/branches`);
+    const unique = [...new Set(branches.map((branch) => branch.name))];
+    const defaultBranch = metadata.default_branch;
+    return unique.sort((left, right) => {
+      if (left === defaultBranch) return -1;
+      if (right === defaultBranch) return 1;
+      return left.localeCompare(right);
+    });
   }
 
   private async collectArrayPages<T>(path: string): Promise<T[]> {
