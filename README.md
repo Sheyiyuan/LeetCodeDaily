@@ -55,6 +55,7 @@ LeetCodeDaily 是一个只面向 [力扣中国站](https://leetcode.cn/) 的 Chr
 - 按用户设置的 IANA 时区聚合自然日。
 - 颜色强度依据当天通过的不同题目数，同时保留 Accepted 总次数。
 - 生成无脚本、无交互的纯 SVG，可用 `<picture>` 自动适配 GitHub 深浅主题。
+- SVG 背景透明；可用 `?colors=ffd8bf,ff9f7a,f05a3c,b42318` 自定义四档方块颜色，依次对应 `1 / 2 / 3-4 / 5+` 题。
 - [热力图样式参考](https://github.com/yuhhhy)
 
 ## 使用流程

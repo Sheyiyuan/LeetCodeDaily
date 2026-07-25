@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { renderHeatmapDocument, renderHeatmapError } from "./heatmap";
+import { parseHeatmapColors, renderHeatmapDocument, renderHeatmapError } from "./heatmap";
+
+describe("parseHeatmapColors", () => {
+  it("parses four URL-safe RGB colors", () => {
+    expect(parseHeatmapColors("ABCDEF,234567,345678,456789")).toEqual([
+      "#abcdef",
+      "#234567",
+      "#345678",
+      "#456789",
+    ]);
+  });
+
+  it("ignores invalid color parameters", () => {
+    expect(parseHeatmapColors("red,234567,345678,456789")).toBeUndefined();
+    expect(parseHeatmapColors("123456,234567")).toBeUndefined();
+    expect(parseHeatmapColors(null)).toBeUndefined();
+  });
+});
 
 describe("renderHeatmapDocument", () => {
   it("renders accepted totals, escaped account names, and one cell per day", () => {
@@ -29,6 +46,7 @@ describe("renderHeatmapDocument", () => {
     expect(svg).not.toContain("LeetCode Activity</text>");
     expect(svg).not.toContain(">Less</text>");
     expect(svg).not.toContain("prefers-color-scheme");
+    expect(svg).not.toContain('<rect width="1360"');
   });
 
   it("renders an explicit empty state and an adaptive theme", () => {
@@ -64,6 +82,22 @@ describe("renderHeatmapDocument", () => {
     expect(svg).toContain("2025-07-26 to 2026-07-25");
     expect(svg).toContain('fill="var(--level-1)" opacity="1"');
   });
+
+  it("uses custom active colors in both themes while keeping level zero adaptive", () => {
+    const svg = renderHeatmapDocument({
+      login: "octocat",
+      year: 2026,
+      rows: [],
+      updatedAt: null,
+      theme: "auto",
+      colors: ["#123456", "#234567", "#345678", "#456789"],
+    });
+
+    expect(svg.match(/--level-1:#123456/g)).toHaveLength(2);
+    expect(svg.match(/--level-4:#456789/g)).toHaveLength(2);
+    expect(svg).toContain("--level-0:#ebedf0");
+    expect(svg).toContain("--level-0:#2d1b1b");
+  });
 });
 
 describe("renderHeatmapError", () => {
@@ -73,6 +107,8 @@ describe("renderHeatmapError", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("image/svg+xml");
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=30");
-    await expect(response.text()).resolves.toContain("temporarily unavailable");
+    const svg = await response.text();
+    expect(svg).toContain("temporarily unavailable");
+    expect(svg).not.toContain('<rect width="820"');
   });
 });

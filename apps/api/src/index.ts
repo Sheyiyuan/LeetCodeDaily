@@ -8,7 +8,12 @@ import {
   startGitHubAuth,
 } from "./auth";
 import type { Env } from "./env";
-import { renderHeatmap, renderHeatmapError, type HeatmapTheme } from "./heatmap";
+import {
+  parseHeatmapColors,
+  renderHeatmap,
+  renderHeatmapError,
+  type HeatmapTheme,
+} from "./heatmap";
 import { corsHeaders, json, withCors } from "./http";
 import { runScheduledMaintenance } from "./maintenance";
 import { enforceRateLimit, type RateLimitPolicy } from "./rate-limit";
@@ -108,6 +113,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       validTheme(url.searchParams.get("theme")),
       env,
       !url.searchParams.has("year"),
+      parseHeatmapColors(url.searchParams.get("colors")),
     );
   }
 

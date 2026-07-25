@@ -1,6 +1,7 @@
 import type { Env } from "./env";
 
 export type HeatmapTheme = "auto" | "light" | "dark";
+export type HeatmapColors = [string, string, string, string];
 
 export interface ActivityRow {
   local_date: string;
@@ -14,24 +15,33 @@ interface HeatmapDocumentInput {
   rows: ActivityRow[];
   updatedAt: string | null;
   theme: HeatmapTheme;
+  colors?: HeatmapColors;
   endDate?: string;
 }
 
 const LIGHT_COLORS = {
-  background: "#ffffff",
   primary: "#24292f",
   secondary: "#57606a",
   muted: "#6e7781",
   levels: ["#ebedf0", "#ffd8bf", "#ff9f7a", "#f05a3c", "#b42318"],
 };
 const DARK_COLORS = {
-  background: "#0d1117",
   primary: "#f0f6fc",
   secondary: "#8b949e",
   muted: "#6e7681",
   levels: ["#2d1b1b", "#6e241b", "#a83a25", "#e85d3f", "#ff8a65"],
 };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const HEX_COLOR_PATTERN = /^[0-9a-f]{6}$/i;
+
+export function parseHeatmapColors(value: string | null): HeatmapColors | undefined {
+  if (!value) return undefined;
+  const colors = value.split(",");
+  if (colors.length !== 4 || !colors.every((color) => HEX_COLOR_PATTERN.test(color))) {
+    return undefined;
+  }
+  return colors.map((color) => `#${color.toLowerCase()}`) as HeatmapColors;
+}
 
 function escapeXml(value: string): string {
   return value
@@ -69,30 +79,29 @@ function dateKeyInTimeZone(date: Date, timeZone: string): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function cssVariables(colors: typeof LIGHT_COLORS): string {
+function cssVariables(colors: typeof LIGHT_COLORS, activeColors?: HeatmapColors): string {
+  const levels = activeColors ? [colors.levels[0], ...activeColors] : colors.levels;
   return [
-    `--background:${colors.background}`,
     `--primary:${colors.primary}`,
     `--secondary:${colors.secondary}`,
     `--muted:${colors.muted}`,
-    ...colors.levels.map((color, index) => `--level-${index}:${color}`),
+    ...levels.map((color, index) => `--level-${index}:${color}`),
   ].join(";");
 }
 
-function themeStyle(theme: HeatmapTheme): string {
+function themeStyle(theme: HeatmapTheme, activeColors?: HeatmapColors): string {
   const initial = theme === "dark" ? DARK_COLORS : LIGHT_COLORS;
   const media =
     theme === "auto"
-      ? `@media (prefers-color-scheme:dark){:root{${cssVariables(DARK_COLORS)}}}`
+      ? `@media (prefers-color-scheme:dark){:root{${cssVariables(DARK_COLORS, activeColors)}}}`
       : "";
-  return `<style>:root{${cssVariables(initial)}}${media}</style>`;
+  return `<style>:root{${cssVariables(initial, activeColors)}}${media}</style>`;
 }
 
 function statusSvg(title: string, message: string, theme: HeatmapTheme): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="820" height="120" role="img" aria-label="${escapeXml(message)}">
   <title>${escapeXml(message)}</title>
   ${themeStyle(theme)}
-  <rect width="820" height="120" rx="8" fill="var(--background)"/>
   <text x="24" y="50" fill="var(--primary)" font-family="system-ui,sans-serif" font-size="17" font-weight="600">${escapeXml(title)}</text>
   <text x="24" y="78" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="13">${escapeXml(message)}</text>
 </svg>`;
@@ -156,8 +165,7 @@ export function renderHeatmapDocument(input: HeatmapDocumentInput): string {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="196" viewBox="0 0 1360 196" role="img" aria-label="${escapeXml(ariaLabel)}">
   <title>${escapeXml(ariaLabel)}</title>
-  ${themeStyle(input.theme)}
-  <rect width="1360" height="196" fill="var(--background)"/>
+  ${themeStyle(input.theme, input.colors)}
   ${monthLabels.join("")}
   <text x="16" y="${top + 1 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Mon</text>
   <text x="16" y="${top + 3 * (cell + gap) + 15}" fill="var(--secondary)" font-family="system-ui,sans-serif" font-size="16">Wed</text>
@@ -172,6 +180,7 @@ export async function renderHeatmap(
   theme: HeatmapTheme,
   env: Env,
   rolling = false,
+  colors?: HeatmapColors,
 ): Promise<Response> {
   const account = await env.DB.prepare(
     `SELECT a.github_user_id, a.current_login, h.public_enabled,
@@ -223,6 +232,7 @@ export async function renderHeatmap(
       rows: rows.results,
       updatedAt: account.updated_at,
       theme,
+      ...(colors ? { colors } : {}),
       ...(rolling ? { endDate: dateKey(lastDate) } : {}),
     }),
     300,
