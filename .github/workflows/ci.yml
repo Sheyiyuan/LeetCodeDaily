@@ -24,5 +24,11 @@ jobs:
       - run: pnpm run test:run
       - run: pnpm --filter @leetcode-daily/extension build
       - run: pnpm run extension:check
+      - run: pnpm run extension:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: leetcode-daily-extension
+          path: release/leetcode-daily-*.zip
+          if-no-files-found: error
       - run: pnpm --filter @leetcode-daily/api build
       - run: pnpm run worker:smoke

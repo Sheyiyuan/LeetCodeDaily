@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { dashboardFailureMessage, latestFailureMessage } from "./dashboard";
+import {
+  dashboardFailureMessage,
+  latestFailureMessage,
+  selectRecentActivityDays,
+} from "./dashboard";
 
 describe("dashboard failure reporting", () => {
+  it("keeps the sixty activity days required by the popup grid", () => {
+    const days = Array.from({ length: 61 }, (_, index) => ({
+      localDate: new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10),
+    }));
+
+    expect(selectRecentActivityDays(days)).toHaveLength(60);
+    expect(selectRecentActivityDays(days)[0]?.localDate).toBe("2026-01-02");
+    expect(selectRecentActivityDays(days).at(-1)?.localDate).toBe("2026-03-02");
+  });
+
   it("returns the most recently updated candidate or sync error", () => {
     expect(
       latestFailureMessage(

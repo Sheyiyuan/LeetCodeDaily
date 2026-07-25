@@ -68,6 +68,19 @@ http://127.0.0.1:5173/preview.html?view=options
 
 生产构建位于 `apps/extension/dist`，可通过 Chrome 的“加载已解压的扩展程序”载入。
 
+## 首次使用
+
+下载发布包 `release/leetcode-daily-0.1.0.zip` 后解压，在 `chrome://extensions` 开启“开发者模式”，选择“加载已解压的扩展程序”并选中解压目录。正式商店发布后可直接从商店安装；两种安装方式使用相同的功能流程。
+
+1. 打开 `https://leetcode.cn/` 并登录力扣中国站，至少保留一个力扣页面打开。
+2. 点击扩展图标，打开“GitHub 与同步设置”，连接 GitHub。
+3. 在 GitHub App 安装设置中只授权要写入的仓库，并确认 `Contents` 权限为 `Read and write`。回到设置页刷新仓库列表，选择仓库和分支后保存。
+4. 在力扣题目页提交并通过。扩展会先校验官方 submission detail，再把 `README.md` 和对应语言题解作为一次原子 commit 写入目标仓库。
+5. 若要显示历史活动，保持力扣页面打开，扩展会在后台逐题回填。历史代码不会自动写入；在设置页确认目标仓库后点击“开始导入”。
+6. 在设置页开启“公开刷题热力图”，保存后复制 SVG 地址或 README `<picture>` 片段。公开开关默认关闭。
+
+如果仓库列表为空，请先在 GitHub 的 App 安装设置中批准目标仓库和新增权限，再回到扩展刷新列表。同步失败时 Popup 会显示原因并提供“重试”；无需重新提交题目。
+
 ## GitHub App 配置
 
 GitHub App 需要：
@@ -116,7 +129,7 @@ GitHub Profile README 示例（根据 GitHub 深浅主题自动选择）：
 </picture>
 ```
 
-可用查询参数：`theme=auto|light|dark`；`year=2026` 可固定展示年份。省略年份时自动展示当前年份。
+可用查询参数：`theme=auto|light|dark`；`year=2026` 可固定展示自然年。省略年份时展示以用户时区今天为结束日的滚动 365 天窗口。
 
 ## 发布前仍需完成
 

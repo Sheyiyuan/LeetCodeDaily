@@ -10,6 +10,15 @@ let stats: SolvedStats | null = null;
 let lastSuccessfulRefreshAt: string | null = null;
 let error: string | null = null;
 
+export function selectRecentActivityDays<T extends { localDate: string }>(
+  days: T[],
+  count = 60,
+): T[] {
+  return [...days]
+    .sort((left, right) => left.localDate.localeCompare(right.localDate))
+    .slice(-Math.max(0, count));
+}
+
 export function latestFailureMessage(
   candidates: Array<{
     hydrationState: string;
@@ -85,14 +94,11 @@ export async function readDashboard(): Promise<DashboardState> {
     db.getAll("candidates"),
     db.getAll("syncJobs"),
   ]);
-  const activityDays = dailyActivity
-    .sort((left, right) => left.localDate.localeCompare(right.localDate))
-    .slice(-30)
-    .map((day) => ({
-      localDate: day.localDate,
-      acceptedSubmissionCount: day.acceptedSubmissionCount,
-      distinctProblemCount: day.distinctProblemIds.length,
-    }));
+  const activityDays = selectRecentActivityDays(dailyActivity).map((day) => ({
+    localDate: day.localDate,
+    acceptedSubmissionCount: day.acceptedSubmissionCount,
+    distinctProblemCount: day.distinctProblemIds.length,
+  }));
   const historyActivity = await db.get("historyActivity", "history-activity");
   const historyError =
     historyActivity?.state === "failed" ? historyActivity.lastError?.trim() : null;
