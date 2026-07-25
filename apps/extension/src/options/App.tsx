@@ -268,9 +268,7 @@ export function App() {
     <main className="options-shell">
       <header className="options-header">
         <div className="options-brand">
-          <span className="brand-mark large">
-            <Code2 size={20} />
-          </span>
+          <img alt="" className="extension-brand-icon" src="icons/icon-48.png" />
           <span>
             <strong>LeetCodeDaily</strong>
             <small>leetcode.cn 自动同步</small>
