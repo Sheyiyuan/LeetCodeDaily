@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isAllowedAuthRedirect } from "./auth";
+import { hasOAuthRepoScope, isAllowedAuthRedirect } from "./auth";
 
 const env = {
   ALLOWED_EXTENSION_ORIGIN:
@@ -24,5 +24,17 @@ describe("GitHub auth redirect validation", () => {
     expect(
       isAllowedAuthRedirect("http://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/github", env),
     ).toBe(false);
+  });
+});
+
+describe("GitHub OAuth scope validation", () => {
+  it("accepts the classic repo scope among other scopes", () => {
+    expect(hasOAuthRepoScope("read:user, repo, user:email")).toBe(true);
+  });
+
+  it("rejects GitHub App and read-only OAuth credentials", () => {
+    expect(hasOAuthRepoScope(null)).toBe(false);
+    expect(hasOAuthRepoScope("")).toBe(false);
+    expect(hasOAuthRepoScope("read:user, public_repo")).toBe(false);
   });
 });

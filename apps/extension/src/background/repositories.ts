@@ -10,3 +10,7 @@ async function client(): Promise<GitHubRepositoryClient> {
 export async function readRepositoryBranches(repository: string): Promise<string[]> {
   return (await client()).listBranches(repository);
 }
+
+export async function assertRepositoryWritable(repository: string, branch: string): Promise<void> {
+  await (await client()).assertWritable(repository, branch);
+}

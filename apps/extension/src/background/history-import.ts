@@ -12,7 +12,9 @@ import { syncActivityToCloud } from "./activity-sync";
 import { githubAccessToken } from "./auth";
 import { setFailureBadge } from "./badge";
 import { database, type StoredHistoryImport } from "./database";
+import { githubSyncFailureMessage } from "./github-errors";
 import { leetcodeClient } from "./leetcode";
+import { assertRepositoryWritable } from "./repositories";
 import { joinRepositoryPath } from "./repository-path";
 import { readSettings } from "./settings";
 
@@ -86,6 +88,7 @@ export async function startHistoryImport(): Promise<HistoryImportStatus> {
     throw new Error("GitHub 仓库格式无效");
   }
   if (!(await githubAccessToken())) throw new Error("请先连接 GitHub");
+  await assertRepositoryWritable(settings.githubRepository, settings.githubBranch);
 
   const db = await database();
   const existing = await db.get("historyImport", IMPORT_ID);
@@ -139,6 +142,9 @@ export async function pauseHistoryImport(): Promise<HistoryImportStatus> {
 }
 
 export async function resumeHistoryImport(): Promise<HistoryImportStatus> {
+  const job = await (await database()).get("historyImport", IMPORT_ID);
+  if (!job) throw new Error("没有可继续的历史导入任务");
+  await assertRepositoryWritable(`${job.owner}/${job.repository}`, job.branch);
   const status = await updateState("running");
   await scheduleHistoryImport();
   return status;
@@ -396,7 +402,7 @@ async function commitPendingBatch(job: StoredHistoryImport): Promise<void> {
     }
   } catch (cause) {
     const retryable = cause instanceof GitHubSyncError ? cause.retryable : true;
-    const message = cause instanceof Error ? cause.message : "GitHub 历史导入失败";
+    const message = githubSyncFailureMessage(cause);
     if (retryable) {
       const db = await database();
       const current = await db.get("historyImport", IMPORT_ID);

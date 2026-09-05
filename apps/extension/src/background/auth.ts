@@ -24,9 +24,7 @@ interface AuthExchangeResponse {
 let accessTokenRefresh: Promise<string | null> | null = null;
 
 async function responseJson<T>(response: Response): Promise<T> {
-  const body = (await response.json().catch(() => null)) as
-    | (T & { error?: string })
-    | null;
+  const body = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!response.ok || !body) {
     throw new Error(body?.error ?? `请求失败（${response.status}）`);
   }
@@ -51,9 +49,7 @@ async function persistAuth(auth: AuthExchangeResponse): Promise<void> {
 export async function readGitHubAuth(): Promise<GitHubAuthState> {
   const stored = await chrome.storage.local.get(Object.values(LOCAL_KEYS));
   const expiresAt =
-    typeof stored.githubSessionExpiresAt === "string"
-      ? stored.githubSessionExpiresAt
-      : null;
+    typeof stored.githubSessionExpiresAt === "string" ? stored.githubSessionExpiresAt : null;
   const connected =
     typeof stored.githubSessionToken === "string" &&
     typeof stored.githubLogin === "string" &&
@@ -61,10 +57,7 @@ export async function readGitHubAuth(): Promise<GitHubAuthState> {
     expiresAt > new Date().toISOString();
   return {
     connected,
-    login:
-      connected && typeof stored.githubLogin === "string"
-        ? stored.githubLogin
-        : null,
+    login: connected && typeof stored.githubLogin === "string" ? stored.githubLogin : null,
     sessionExpiresAt: connected ? expiresAt : null,
     heatmapUrl:
       connected && typeof stored.githubLogin === "string"
@@ -75,9 +68,7 @@ export async function readGitHubAuth(): Promise<GitHubAuthState> {
 
 export async function sessionToken(): Promise<string | null> {
   const stored = await chrome.storage.local.get(LOCAL_KEYS.sessionToken);
-  return typeof stored.githubSessionToken === "string"
-    ? stored.githubSessionToken
-    : null;
+  return typeof stored.githubSessionToken === "string" ? stored.githubSessionToken : null;
 }
 
 export async function connectGitHub(): Promise<GitHubAuthState> {
@@ -101,7 +92,9 @@ export async function connectGitHub(): Promise<GitHubAuthState> {
     throw new Error(
       oauthError === "access_denied"
         ? "你取消了 GitHub 授权"
-        : "GitHub 授权失败",
+        : oauthError === "missing_repo_scope"
+          ? "GitHub 授权缺少 repo 权限，请联系插件维护者检查 OAuth App 配置"
+          : "GitHub 授权失败",
     );
   }
 

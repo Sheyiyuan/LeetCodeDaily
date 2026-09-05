@@ -2,14 +2,55 @@ import { describe, expect, it } from "vitest";
 
 import { GitHubRepositoryClient } from "./github-api";
 
-function json(body: unknown, status = 200): Response {
+function json(body: unknown, status = 200, headers: HeadersInit = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
   });
 }
 
 describe("GitHubRepositoryClient", () => {
+  it("verifies OAuth repo scope and repository write access before importing", async () => {
+    const client = new GitHubRepositoryClient("token", async (input) => {
+      const url = String(input);
+      if (url.endsWith("/user")) {
+        return json({}, 200, { "X-OAuth-Scopes": "read:user, repo" });
+      }
+      if (url.endsWith("/repos/octocat/solutions")) {
+        return json({ permissions: { push: true } });
+      }
+      if (url.endsWith("/repos/octocat/solutions/git/ref/heads/main")) {
+        return json({ ref: "refs/heads/main" });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await expect(client.assertWritable("octocat/solutions", "main")).resolves.toBeUndefined();
+  });
+
+  it("rejects a GitHub App token before history data is pulled", async () => {
+    const client = new GitHubRepositoryClient("token", async () => json({}));
+
+    await expect(client.assertWritable("octocat/solutions", "main")).rejects.toThrow(
+      "当前连接不是具有 repo 权限的 GitHub OAuth App",
+    );
+  });
+
+  it("allows an empty writable repository to be bootstrapped by the commit client", async () => {
+    const requests: string[] = [];
+    const client = new GitHubRepositoryClient("token", async (input) => {
+      const url = String(input);
+      requests.push(url);
+      if (url.endsWith("/user")) {
+        return json({}, 200, { "X-OAuth-Scopes": "repo" });
+      }
+      return json({ permissions: { push: true }, size: 0 });
+    });
+
+    await expect(client.assertWritable("octocat/empty", "main")).resolves.toBeUndefined();
+    expect(requests).toHaveLength(2);
+  });
+
   it("loads the default branch before the remaining branches", async () => {
     const client = new GitHubRepositoryClient("token", async (input) => {
       const url = String(input);

@@ -17,6 +17,43 @@ export class GitHubRepositoryClient {
     private readonly apiBaseUrl = "https://api.github.com",
   ) {}
 
+  async assertWritable(repository: string, branch: string): Promise<void> {
+    const scopesResponse = await this.fetchImpl(`${this.apiBaseUrl}/user`, {
+      headers: this.headers(),
+    });
+    if (!scopesResponse.ok) {
+      await this.throwResponseError(scopesResponse);
+    }
+    const scopes = (scopesResponse.headers.get("X-OAuth-Scopes") ?? "")
+      .split(",")
+      .map((scope) => scope.trim().toLowerCase());
+    if (!scopes.includes("repo")) {
+      throw new GitHubApiError(
+        "当前连接不是具有 repo 权限的 GitHub OAuth App。请断开 GitHub 后重新连接，再继续导入。",
+        403,
+      );
+    }
+
+    const [owner, name, ...rest] = repository.split("/");
+    if (!owner || !name || rest.length > 0) {
+      throw new TypeError("GitHub 仓库必须使用 owner/repository 格式");
+    }
+    const repositoryPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+    const metadata = await this.request<{
+      permissions?: { push?: boolean };
+      size?: number;
+    }>(repositoryPath);
+    if (metadata.permissions?.push !== true) {
+      throw new GitHubApiError(
+        "当前 GitHub 账号没有该仓库的写权限，请检查 owner/repository 后重试。",
+        403,
+      );
+    }
+    if (metadata.size !== 0) {
+      await this.request(`${repositoryPath}/git/ref/heads/${encodeURIComponent(branch)}`);
+    }
+  }
+
   async listBranches(repository: string): Promise<string[]> {
     const [owner, name, ...rest] = repository.split("/");
     if (!owner || !name || rest.length > 0) {
@@ -49,19 +86,27 @@ export class GitHubRepositoryClient {
 
   private async request<T>(path: string): Promise<T> {
     const response = await this.fetchImpl(`${this.apiBaseUrl}${path}`, {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${this.token}`,
-        "X-GitHub-Api-Version": "2026-03-10",
-      },
+      headers: this.headers(),
     });
     if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new GitHubApiError(
-        body?.message ?? `GitHub returned HTTP ${response.status}`,
-        response.status,
-      );
+      await this.throwResponseError(response);
     }
     return (await response.json()) as T;
+  }
+
+  private headers(): HeadersInit {
+    return {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${this.token}`,
+      "X-GitHub-Api-Version": "2026-03-10",
+    };
+  }
+
+  private async throwResponseError(response: Response): Promise<never> {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new GitHubApiError(
+      body?.message ?? `GitHub returned HTTP ${response.status}`,
+      response.status,
+    );
   }
 }

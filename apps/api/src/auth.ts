@@ -10,6 +10,7 @@ interface GitHubTokenResponse {
   expires_in?: number;
   refresh_token?: string;
   refresh_token_expires_in?: number;
+  scope?: string;
   error?: string;
   error_description?: string;
 }
@@ -18,6 +19,11 @@ interface GitHubUser {
   id: number;
   login: string;
   avatar_url: string;
+}
+
+interface GitHubIdentity {
+  user: GitHubUser;
+  scopes: string | null;
 }
 
 interface AuthAttempt {
@@ -98,7 +104,14 @@ async function tokenRequest(fields: Record<string, string>): Promise<GitHubToken
   return body;
 }
 
-async function githubUser(accessToken: string): Promise<GitHubUser> {
+export function hasOAuthRepoScope(value: string | null | undefined): boolean {
+  return (value ?? "")
+    .split(",")
+    .map((scope) => scope.trim().toLowerCase())
+    .includes("repo");
+}
+
+async function githubIdentity(accessToken: string): Promise<GitHubIdentity> {
   const response = await fetch("https://api.github.com/user", {
     headers: {
       Accept: "application/vnd.github+json",
@@ -108,7 +121,10 @@ async function githubUser(accessToken: string): Promise<GitHubUser> {
     },
   });
   if (!response.ok) throw new Error("Unable to read GitHub account");
-  return (await response.json()) as GitHubUser;
+  return {
+    user: (await response.json()) as GitHubUser,
+    scopes: response.headers.get("X-OAuth-Scopes"),
+  };
 }
 
 function callbackUrl(env: Env & { PUBLIC_BASE_URL: string }): string {
@@ -208,7 +224,11 @@ export async function finishGitHubAuth(request: Request, env: Env): Promise<Resp
       throw new Error("GitHub OAuth App returned an incomplete expiring token");
     }
 
-    const user = await githubUser(token.access_token);
+    const identity = await githubIdentity(token.access_token);
+    if (!hasOAuthRepoScope(identity.scopes || token.scope)) {
+      return redirectWith(attempt.redirect_uri, { error: "missing_repo_scope" });
+    }
+    const user = identity.user;
     const now = new Date();
     const keyRing = readEncryptionKeyRing(env);
     const activeKey = encryptionKeyForVersion(keyRing, keyRing.activeVersion);
@@ -393,6 +413,10 @@ export async function refreshGitHubAccess(request: Request, env: Env): Promise<R
       credential.nonce,
       encryptionKeyForVersion(keyRing, credential.key_version),
     );
+    const identity = await githubIdentity(accessToken).catch(() => null);
+    if (!identity || !hasOAuthRepoScope(identity.scopes)) {
+      return json({ error: "reauthorization_required" }, { status: 401 });
+    }
     return json({
       accessToken,
       accessTokenExpiresAt: NON_EXPIRING_TOKEN_EXPIRES_AT,
@@ -418,6 +442,10 @@ export async function refreshGitHubAccess(request: Request, env: Env): Promise<R
       !token.refresh_token_expires_in
     ) {
       throw new Error("Invalid refresh response");
+    }
+    const identity = await githubIdentity(token.access_token);
+    if (!hasOAuthRepoScope(identity.scopes || token.scope)) {
+      return json({ error: "reauthorization_required" }, { status: 401 });
     }
     const now = new Date();
     const refresh = await encryptSecret(
