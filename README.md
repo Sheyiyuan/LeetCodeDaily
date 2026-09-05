@@ -58,6 +58,44 @@ LeetCodeDaily 是一个只面向 [力扣中国站](https://leetcode.cn/) 的 Chr
 - SVG 背景透明；可用 `?colors=ffd8bf,ff9f7a,f05a3c,b42318` 自定义四档方块颜色，依次对应 `1 / 2 / 3-4 / 5+` 题。
 - [热力图样式参考](https://github.com/yuhhhy)
 
+#### 嵌入 GitHub Profile README
+
+在扩展设置中开启“公开刷题热力图”后，每个 GitHub 账号都有一个固定 SVG 地址：
+
+```text
+https://leetcode-daily-api.deshengl331.workers.dev/heatmap/github/YOUR_GITHUB_LOGIN.svg
+```
+
+地址支持以下查询参数；颜色只通过 URL 配置，不会保存到扩展或服务端：
+
+| 参数 | 说明 | 示例 |
+| --- | --- | --- |
+| `colors` | 四个不带 `#` 的六位十六进制颜色，依次对应 `1 / 2 / 3-4 / 5+` 题 | `colors=9be9a8,40c463,30a14e,216e39` |
+| `theme` | `light`、`dark` 或 `auto`，默认为 `auto` | `theme=dark` |
+| `year` | 显示指定自然年；不传时显示最近 365 天 | `year=2026` |
+| `v` | 可选的缓存版本；修改配色或样式后更改该值可刷新 GitHub Camo 缓存 | `v=2` |
+
+非法的 `colors` 会回退到默认配色，SVG 仍可正常显示。直接使用固定地址即可嵌入默认热力图：
+
+```markdown
+![LeetCode Activity](https://leetcode-daily-api.deshengl331.workers.dev/heatmap/github/YOUR_GITHUB_LOGIN.svg)
+```
+
+GitHub Profile 推荐用 `<picture>` 分别指定深浅主题。`srcset` 中的颜色分隔逗号需要写成 `%2C`：
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)"
+    srcset="https://leetcode-daily-api.deshengl331.workers.dev/heatmap/github/yuhhhy.svg?theme=dark&amp;colors=0e4429%2C006d32%2C26a641%2C39d353&amp;v=1">
+  <source media="(prefers-color-scheme: light)"
+    srcset="https://leetcode-daily-api.deshengl331.workers.dev/heatmap/github/yuhhhy.svg?theme=light&amp;colors=9be9a8%2C40c463%2C30a14e%2C216e39&amp;v=1">
+  <img alt="LeetCode Activity"
+    src="https://leetcode-daily-api.deshengl331.workers.dev/heatmap/github/yuhhhy.svg">
+</picture>
+```
+
+把示例中的 `yuhhhy` 换成自己的 GitHub 用户名。背景始终透明，零活动方块会随 `theme` 使用适合当前主题的颜色。
+
 ## 使用流程
 
 1. 安装扩展，并登录 [leetcode.cn](https://leetcode.cn/)。
